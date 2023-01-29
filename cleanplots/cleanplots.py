@@ -34,8 +34,10 @@ plt.rcParams['font.style'] = 'normal'
 plt.rcParams["font.family"] = "sans-serif"
 
 plt.rc('axes', linewidth=2)    
-plt.rc('xtick.major', width=2)    
-plt.rc('ytick.major', width=2)    
+plt.rc('xtick.major', width=2, size=5)    
+plt.rc('ytick.major', width=2, size=5)  
+plt.rc('xtick.minor', width=1, size=2.5)    
+plt.rc('ytick.minor', width=1, size=2.5)  
 
 plt.rc('axes', titlesize=SMALL_SIZE)     # fontsize of the axes title
 plt.rc('axes', labelsize=MEDIUM_SIZE)    # fontsize of the x and y labels
@@ -227,3 +229,29 @@ def plot_line(x, y, ax=None, **kwargs):
     ax.set(**kwargs)
     
 
+def ipympl_fig(**kwargs):
+    # Workaround for creating ipympl figures that allows them to
+    # be created an run from same cell
+    with plt.ioff():
+        fig = plt.figure(**kwargs)
+    canvas = fig.canvas
+    display(canvas)
+    if hasattr(canvas, '_handle_message'):
+        canvas._handle_message(canvas, {'type': 'send_image_mode'}, [])
+        canvas._handle_message(canvas, {'type':'refresh'}, [])
+        canvas._handle_message(canvas,{'type': 'initialized'},[])
+        canvas._handle_message(canvas,{'type': 'draw'},[])
+    return fig
+
+def ipympl_subplots(*args, **kwargs):
+    # Workaround for creating ipympl figures that allows them to
+    # be created an run from same cell
+    with plt.ioff():
+        fig, ax = plt.subplots(*args, **kwargs)
+    canvas = fig.canvas
+    display(canvas)
+    canvas._handle_message(canvas, {'type': 'send_image_mode'}, [])
+    canvas._handle_message(canvas, {'type':'refresh'}, [])
+    canvas._handle_message(canvas,{'type': 'initialized'},[])
+    canvas._handle_message(canvas,{'type': 'draw'},[])
+    return fig, ax
