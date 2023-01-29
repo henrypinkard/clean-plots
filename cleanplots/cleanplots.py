@@ -34,8 +34,10 @@ plt.rcParams['font.style'] = 'normal'
 plt.rcParams["font.family"] = "sans-serif"
 
 plt.rc('axes', linewidth=2)    
-plt.rc('xtick.major', width=2)    
-plt.rc('ytick.major', width=2)    
+plt.rc('xtick.major', width=2, size=5)    
+plt.rc('ytick.major', width=2, size=5)  
+plt.rc('xtick.minor', width=1, size=2.5)    
+plt.rc('ytick.minor', width=1, size=2.5)  
 
 plt.rc('axes', titlesize=SMALL_SIZE)     # fontsize of the axes title
 plt.rc('axes', labelsize=MEDIUM_SIZE)    # fontsize of the x and y labels
@@ -175,10 +177,11 @@ def show_complex_image(image, ax=None, amplitude_contrast_min=AMPLITUDE_CONTRAST
 
 
 def show_image(image, ax=None, contrast_max=None, contrast_min=None, name='', colorbar=True, origin='upper', pixel_size_um=None,
+               cmap='inferno',
               **kwargs):
     if ax is None:
         fig, ax = plt.subplots()
-    im = ax.imshow(image, cmap='inferno', vmin=contrast_min, vmax=contrast_max, origin=origin,
+    im = ax.imshow(image, cmap=cmap, vmin=contrast_min, vmax=contrast_max, origin=origin,
                   interpolation='nearest')
     ax.spines['right'].set_visible(False)
     ax.spines['bottom'].set_visible(False)
