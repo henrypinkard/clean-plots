@@ -55,8 +55,11 @@ def default_format(ax):
     clear_spines(ax)
     zero_lims(ax)
 
-def clear_spines(ax):
-    ax.spines[["top", "right"]].set_visible(False)
+def clear_spines(ax, all=False):
+    if all:
+        ax.spines[["top", "right", "bottom", "left"]].set_visible(False)
+    else:
+        ax.spines[["top", "right"]].set_visible(False)
     
 def decimal_format_ticks(ax):
     def formatter(x, pos):
