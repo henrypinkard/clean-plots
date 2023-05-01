@@ -48,6 +48,12 @@ plt.rc('figure', titlesize=BIGGER_SIZE)  # fontsize of the figure title
     
 
 
+from cycler import cycler
+colors =  ['#179EE8', '#5A00A0',  '#21CA10', '#FF005B', '#D40E9F']
+mpl.rcParams['axes.prop_cycle'] = cycler(color=colors)
+
+
+
 ##### General stylizing of plots #####
 def default_format(ax):
     decimal_format_ticks(ax)
@@ -55,11 +61,13 @@ def default_format(ax):
     clear_spines(ax)
     zero_lims(ax)
 
-def clear_spines(ax, all=False):
+def clear_spines(ax, all=False, leave=["bottom", "left"]):
     if all:
         ax.spines[["top", "right", "bottom", "left"]].set_visible(False)
     else:
-        ax.spines[["top", "right"]].set_visible(False)
+        for spine in ["top", "right", "bottom", "left"]:
+            if spine not in leave:
+                ax.spines[spine].set_visible(False)
     
 def decimal_format_ticks(ax):
     def formatter(x, pos):
