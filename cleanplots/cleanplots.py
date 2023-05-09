@@ -49,7 +49,8 @@ plt.rc('figure', titlesize=BIGGER_SIZE)  # fontsize of the figure title
 
 
 from cycler import cycler
-colors =  ['#179EE8', '#5A00A0',  '#21CA10', '#FF005B', '#D40E9F']
+colors =  ['#179EE8', '#5A00A0',  '#21CA10', '#FF005B', '#D40E9F', 
+           '#FFD300', '#676666']
 mpl.rcParams['axes.prop_cycle'] = cycler(color=colors)
 
 
