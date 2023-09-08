@@ -49,17 +49,24 @@ plt.rc('figure', titlesize=BIGGER_SIZE)  # fontsize of the figure title
 
 
 from cycler import cycler
-colors =  ['#179EE8', '#5A00A0',  '#21CA10', '#FF005B', '#D40E9F', '#676666', '#FFD300', ]
+# https://davidmathlogic.com/colorblind/#%23179EE8-%235A00A0-%2321CA10-%23FF005B-%23D40E9F-%235A5A5A-%23DCCC02-%23FF7400
+colors =  ['#179EE8', '#5A00A0',  '#21CA10', '#FF005B', '#D713EC', '#676666', '#FFD300', '#70A94B', '#FF7400', '#8C1B1D', '#8C5410']
 mpl.rcParams['axes.prop_cycle'] = cycler(color=colors)
 
 
+def get_color_cycle():
+    """
+    Returns the current color cycle as a list of hex codes.
+    """
+    return plt.rcParams['axes.prop_cycle'].by_key()['color']
 
 ##### General stylizing of plots #####
-def default_format(ax):
+def default_format(ax, **kwargs):
     decimal_format_ticks(ax)
     sparse_ticks(ax)
     clear_spines(ax)
     zero_lims(ax)
+    ax.set(**kwargs)
 
 def clear_spines(ax, all=False, leave=["bottom", "left"]):
     if all:
