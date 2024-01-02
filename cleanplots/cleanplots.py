@@ -69,12 +69,15 @@ def default_format(ax, **kwargs):
     ax.set(**kwargs)
 
 def clear_spines(ax, all=False, leave=["bottom", "left"]):
-    if all:
-        ax.spines[["top", "right", "bottom", "left"]].set_visible(False)
-    else:
-        for spine in ["top", "right", "bottom", "left"]:
-            if spine not in leave:
-                ax.spines[spine].set_visible(False)
+    if type(ax) not in [list,  np.ndarray]:
+        ax = [ax]
+    for a in ax:
+        if all:
+            a.spines[["top", "right", "bottom", "left"]].set_visible(False)
+        else:
+            for spine in ["top", "right", "bottom", "left"]:
+                if spine not in leave:
+                    a.spines[spine].set_visible(False)
     
 def decimal_format_ticks(ax):
     def formatter(x, pos):
