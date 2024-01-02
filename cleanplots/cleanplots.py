@@ -50,7 +50,8 @@ plt.rc('figure', titlesize=BIGGER_SIZE)  # fontsize of the figure title
 
 from cycler import cycler
 # https://davidmathlogic.com/colorblind/#%23179EE8-%235A00A0-%2321CA10-%23FF005B-%23D40E9F-%235A5A5A-%23DCCC02-%23FF7400
-colors =  ['#179EE8', '#5A00A0', '#FF005B',  '#21CA10',  '#D713EC', '#676666', '#FFD300', '#70A94B', '#FF7400', '#8C1B1D', '#8C5410']
+colors =  ['#179EE8', '#5A00A0', '#FF005B',  '#89E642',  
+           '#D900FF', '#00E0E0', '#F37C2F', '#ACAD9D',]
 mpl.rcParams['axes.prop_cycle'] = cycler(color=colors)
 
 
