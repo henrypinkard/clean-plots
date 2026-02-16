@@ -25,6 +25,7 @@ setuptools.setup(
         "numpy",
         "cmocean",
         "matplotlib",
+        "cycler",
     ],
     python_requires=">=3.6",
     classifiers=[

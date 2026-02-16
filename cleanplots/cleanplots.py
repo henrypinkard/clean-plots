@@ -12,47 +12,78 @@ from matplotlib import cm
 from mpl_toolkits.axes_grid1.anchored_artists import AnchoredSizeBar
 import matplotlib.font_manager as fm
 
-# plt.rc('axes.spines', **{'bottom':True, 'left':True, 'right':False, 'top':False})
-# mpl.rcParams['axes.spines.left'] = True
-# mpl.rcParams['axes.spines.bottom'] = True
-# mpl.rcParams['axes.spines.top'] = False
-# mpl.rcParams['axes.spines.right']  = False
+from cycler import cycler
 
-#editable text in fonts
-mpl.rcParams['pdf.fonttype'] = 42
-mpl.rcParams['ps.fonttype'] = 42
+__all__ = [
+    'set_style',
+    'colors',
+    'SMALL_SIZE', 'MEDIUM_SIZE', 'BIGGER_SIZE',
+    'AMPLITUDE_CONTRAST_MIN',
+    'get_color_cycle',
+    'default_format',
+    'clear_spines',
+    'decimal_format_ticks',
+    'sparse_ticks',
+    'zero_lims',
+    'line_plot_with_phase',
+    'show_colorbar',
+    'show_phase_colorbar',
+    'show_complex_image',
+    'show_image',
+    'add_scalebar',
+    'show_histogram',
+    'plot_line',
+    'ipympl_fig',
+    'ipympl_subplots',
+]
 
-#make text on figures look good
+# Default color cycle
+# https://davidmathlogic.com/colorblind/#%23179EE8-%235A00A0-%2321CA10-%23FF005B-%23D40E9F-%235A5A5A-%23DCCC02-%23FF7400
+colors =  ['#179EE8', '#5A00A0', '#FF005B',  '#57B50F',
+           '#D900FF', '#00E0E0', '#F37C2F', '#ACAD9D',]
+
 SMALL_SIZE = 14
 MEDIUM_SIZE = 18
 BIGGER_SIZE = 24
-plt.rc('font', size=SMALL_SIZE)          # controls default text sizes
-# plt.rc('font', sansserif='Arial')
-plt.rcParams['font.sans-serif'] = ['Arial']
-plt.rcParams['font.style'] = 'normal'
-# plt.rcParams["text.usetex"] = True
-plt.rcParams["font.family"] = "sans-serif"
 
-plt.rc('axes', linewidth=2)    
-plt.rc('xtick.major', width=2, size=5)    
-plt.rc('ytick.major', width=2, size=5)  
-plt.rc('xtick.minor', width=1, size=2.5)    
-plt.rc('ytick.minor', width=1, size=2.5)  
+def set_style(small_size=SMALL_SIZE, medium_size=MEDIUM_SIZE, bigger_size=BIGGER_SIZE,
+              color_cycle=None):
+    """Apply the cleanplots matplotlib style.
 
-plt.rc('axes', titlesize=SMALL_SIZE)     # fontsize of the axes title
-plt.rc('axes', labelsize=MEDIUM_SIZE)    # fontsize of the x and y labels
-plt.rc('xtick', labelsize=SMALL_SIZE)    # fontsize of the tick labels
-plt.rc('ytick', labelsize=SMALL_SIZE)    # fontsize of the tick labels
-plt.rc('legend', fontsize=SMALL_SIZE)    # legend fontsize
-plt.rc('figure', titlesize=BIGGER_SIZE)  # fontsize of the figure title
-    
+    Called automatically on import. Can be called again to re-apply or customize.
+    """
+    #editable text in fonts
+    mpl.rcParams['pdf.fonttype'] = 42
+    mpl.rcParams['ps.fonttype'] = 42
 
+    #make text on figures look good
+    plt.rc('font', size=small_size)          # controls default text sizes
+    # Use Arial if available, otherwise fall back to DejaVu Sans
+    available_fonts = {f.name for f in fm.fontManager.ttflist}
+    if 'Arial' in available_fonts:
+        plt.rcParams['font.sans-serif'] = ['Arial']
+    else:
+        plt.rcParams['font.sans-serif'] = ['DejaVu Sans']
+    plt.rcParams['font.style'] = 'normal'
+    plt.rcParams["font.family"] = "sans-serif"
 
-from cycler import cycler
-# https://davidmathlogic.com/colorblind/#%23179EE8-%235A00A0-%2321CA10-%23FF005B-%23D40E9F-%235A5A5A-%23DCCC02-%23FF7400
-colors =  ['#179EE8', '#5A00A0', '#FF005B',  '#57B50F',  
-           '#D900FF', '#00E0E0', '#F37C2F', '#ACAD9D',]
-mpl.rcParams['axes.prop_cycle'] = cycler(color=colors)
+    plt.rc('axes', linewidth=2)
+    plt.rc('xtick.major', width=2, size=5)
+    plt.rc('ytick.major', width=2, size=5)
+    plt.rc('xtick.minor', width=1, size=2.5)
+    plt.rc('ytick.minor', width=1, size=2.5)
+
+    plt.rc('axes', titlesize=small_size)     # fontsize of the axes title
+    plt.rc('axes', labelsize=medium_size)    # fontsize of the x and y labels
+    plt.rc('xtick', labelsize=small_size)    # fontsize of the tick labels
+    plt.rc('ytick', labelsize=small_size)    # fontsize of the tick labels
+    plt.rc('legend', fontsize=small_size)    # legend fontsize
+    plt.rc('figure', titlesize=bigger_size)  # fontsize of the figure title
+
+    mpl.rcParams['axes.prop_cycle'] = cycler(color=color_cycle or colors)
+
+# Apply style on import
+set_style()
 
 
 def get_color_cycle():
@@ -239,12 +270,12 @@ def add_scalebar(ax, im, pixel_size_um, image_fraction=0.3):
         
 def show_histogram(ax, data, bins, name):
     im = ax.hist(np.ravel(data), bins, density=True)
-    plt.ylabel('Probability')
+    ax.set_ylabel('Probability')
     ax.set_title(name)
     
     
 def plot_line(x, y, ax=None, **kwargs):
-    if ax == None:
+    if ax is None:
         fig, ax = plt.subplots()
     ax.plot(x, y)
     default_format(ax)
