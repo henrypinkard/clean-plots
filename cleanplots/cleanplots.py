@@ -1,40 +1,21 @@
 #convenience code for plot export
 
+import warnings
 import matplotlib as mpl
 import matplotlib.pyplot as plt
+import matplotlib.projections as mprojections
+import matplotlib.patches as mpatches
 import numpy as np
-import cmocean
-from matplotlib.collections import LineCollection
-from matplotlib.colors import ListedColormap, BoundaryNorm
-from matplotlib.gridspec import GridSpec
-from matplotlib import cm
-    
-from mpl_toolkits.axes_grid1.anchored_artists import AnchoredSizeBar
 import matplotlib.font_manager as fm
-
 from cycler import cycler
+from matplotlib.axes import Axes
+from matplotlib.ticker import ScalarFormatter, LogFormatterSciNotation, LogFormatterMathtext
 
 __all__ = [
-    'set_style',
+    'fig',
+    'clean',
     'colors',
-    'SMALL_SIZE', 'MEDIUM_SIZE', 'BIGGER_SIZE',
-    'AMPLITUDE_CONTRAST_MIN',
     'get_color_cycle',
-    'default_format',
-    'clear_spines',
-    'decimal_format_ticks',
-    'sparse_ticks',
-    'zero_lims',
-    'line_plot_with_phase',
-    'show_colorbar',
-    'show_phase_colorbar',
-    'show_complex_image',
-    'show_image',
-    'add_scalebar',
-    'show_histogram',
-    'plot_line',
-    'ipympl_fig',
-    'ipympl_subplots',
 ]
 
 # Default color cycle
@@ -46,7 +27,7 @@ SMALL_SIZE = 14
 MEDIUM_SIZE = 18
 BIGGER_SIZE = 24
 
-def set_style(small_size=SMALL_SIZE, medium_size=MEDIUM_SIZE, bigger_size=BIGGER_SIZE,
+def _set_style(small_size=SMALL_SIZE, medium_size=MEDIUM_SIZE, bigger_size=BIGGER_SIZE,
               color_cycle=None):
     """Apply the cleanplots matplotlib style.
 
@@ -77,13 +58,262 @@ def set_style(small_size=SMALL_SIZE, medium_size=MEDIUM_SIZE, bigger_size=BIGGER
     plt.rc('axes', labelsize=medium_size)    # fontsize of the x and y labels
     plt.rc('xtick', labelsize=small_size)    # fontsize of the tick labels
     plt.rc('ytick', labelsize=small_size)    # fontsize of the tick labels
-    plt.rc('legend', fontsize=small_size)    # legend fontsize
+    plt.rc('legend', fontsize=small_size, frameon=False, handletextpad=0.4)    # legend fontsize, no box
     plt.rc('figure', titlesize=bigger_size)  # fontsize of the figure title
 
     mpl.rcParams['axes.prop_cycle'] = cycler(color=color_cycle or colors)
 
 # Apply style on import
-set_style()
+_set_style()
+
+
+def _is_dataframe(obj):
+    """Check if obj is a pandas DataFrame (duck-typed, no pandas import required)."""
+    return hasattr(obj, 'columns') and hasattr(obj, 'index') and hasattr(obj, 'iteritems') or \
+           (hasattr(obj, 'columns') and hasattr(obj, 'index') and hasattr(obj, 'iloc'))
+
+def _is_series(obj):
+    """Check if obj is a pandas Series (duck-typed, no pandas import required)."""
+    return hasattr(obj, 'index') and hasattr(obj, 'values') and hasattr(obj, 'name') and not hasattr(obj, 'columns')
+
+
+class CleanAxes(Axes):
+    """Axes subclass with convenience methods for clean plotting."""
+    name = 'cleanplots'
+
+    def clean(self, **kwargs):
+        """Format this axes. See module-level clean() for full documentation."""
+        clean(self, **kwargs)
+
+    def _update_legend(self):
+        """Rebuild legend if any labels exist."""
+        handles, labels = self.get_legend_handles_labels()
+        extra = getattr(self, '_clean_extra_handles', [])
+        all_handles = handles + extra
+        all_labels = labels + [h.get_label() for h in extra]
+        if all_labels:
+            super().legend(all_handles, all_labels)
+
+    def line(self, x, y=None, err=None, label=None, err_label=None, alpha=0.2, **kwargs):
+        """Plot a line with optional shaded confidence interval.
+
+        Parameters
+        ----------
+        x : array-like, Series, or DataFrame
+            If array-like, the x coordinates (y must also be provided).
+            If Series, uses index as x and values as y.
+            If DataFrame, plots each column as a separate line using the index
+            as x and column names as labels. xlabel is inferred from index.name.
+        y : array-like, optional
+            The y coordinates. Required when x is array-like, ignored for
+            Series/DataFrame.
+        err : array-like, tuple of (low, high), Series, or DataFrame, optional
+            Error data for shaded confidence intervals.
+            For array mode: symmetric error or (low, high) bounds.
+            For DataFrame mode: a DataFrame with matching columns, where each
+            column provides the error for the corresponding column in x.
+        label : str, optional
+            Legend label for the line. Ignored in DataFrame mode (column names
+            are used). For Series mode, defaults to series.name.
+        err_label : str, optional
+            Legend label for the error band (e.g. '±1 SE', '95% CI').
+            In DataFrame mode, automatically shown only once.
+        alpha : float, default 0.2
+            Opacity of the shaded error region.
+        **kwargs
+            Additional keyword arguments passed to plot() (e.g. color, linewidth, marker).
+        """
+        # DataFrame mode: plot each column as a line
+        if _is_dataframe(x):
+            df = x
+            all_lines = []
+            for i, col in enumerate(df.columns):
+                col_err = err[col] if (_is_dataframe(err) and col in err.columns) else None
+                col_err_label = err_label if (i == 0 and err_label is not None) else None
+                lines = self._line_array(df.index, df[col].values, err=col_err,
+                                         label=str(col), err_label=col_err_label,
+                                         alpha=alpha, **kwargs)
+                all_lines.extend(lines)
+            if hasattr(df.index, 'name') and df.index.name:
+                self.set_xlabel(str(df.index.name))
+            self._update_legend()
+            return all_lines
+
+        # Series mode: use index as x, values as y
+        if _is_series(x):
+            series = x
+            lbl = label if label is not None else (str(series.name) if series.name is not None else None)
+            err_vals = err.values if _is_series(err) else err
+            if hasattr(series.index, 'name') and series.index.name:
+                self.set_xlabel(str(series.index.name))
+            return self._line_array(series.index, series.values, err=err_vals,
+                                    label=lbl, err_label=err_label, alpha=alpha, **kwargs)
+
+        # Array mode
+        return self._line_array(x, y, err=err, label=label, err_label=err_label,
+                                alpha=alpha, **kwargs)
+
+    def _line_array(self, x, y, err=None, label=None, err_label=None, alpha=0.2, **kwargs):
+        """Plot a single line with optional shaded confidence interval (array data)."""
+        lines = self.plot(x, y, label=label, **kwargs)
+        color = lines[0].get_color()
+        if err is not None:
+            if isinstance(err, tuple):
+                low, high = np.asarray(err[0]), np.asarray(err[1])
+            else:
+                y = np.asarray(y)
+                err = np.asarray(err)
+                low, high = y - err, y + err
+            self.fill_between(x, low, high, alpha=alpha, color=color,
+                              label='_nolegend_')
+            if err_label is not None:
+                band_handle = mpatches.Patch(facecolor='gray', alpha=alpha, label=err_label)
+                if not hasattr(self, '_clean_extra_handles'):
+                    self._clean_extra_handles = []
+                self._clean_extra_handles.append(band_handle)
+        self._update_legend()
+        return lines
+
+    def bar(self, x, height=None, err=None, err_label=None, capsize=4, err_kw=None, **kwargs):
+        """Plot a bar chart with optional error bars.
+
+        Parameters
+        ----------
+        x : array-like, Series, or DataFrame
+            If array-like, bar positions or labels (height must be provided).
+            If Series, uses index as labels and values as heights.
+            If DataFrame, plots grouped bars with one group per column, using
+            the index as labels and column names as legend entries.
+        height : array-like, optional
+            Bar heights. Required when x is array-like, ignored for
+            Series/DataFrame.
+        err : array-like, tuple of (low, high), Series, or DataFrame, optional
+            Error bar data. For DataFrame mode, a DataFrame with matching
+            columns provides per-group error bars.
+        err_label : str, optional
+            Legend label for the error bars (e.g. '±1 SD').
+            In DataFrame mode, automatically shown only once.
+        capsize : float, default 4
+            Width of error bar caps in points.
+        err_kw : dict, optional
+            Additional keyword arguments for the error bars.
+        **kwargs
+            Additional keyword arguments passed to matplotlib bar().
+        """
+        # DataFrame mode: grouped bars
+        if _is_dataframe(x):
+            df = x
+            n_groups = len(df.columns)
+            x_pos = np.arange(len(df.index))
+            width = 0.8 / n_groups
+            containers = []
+            for i, col in enumerate(df.columns):
+                col_err = err[col].values if (_is_dataframe(err) and col in err.columns) else None
+                col_err_label = err_label if (i == 0 and err_label is not None) else None
+                offset = (i - (n_groups - 1) / 2) * width
+                container = self._bar_array(x_pos + offset, df[col].values, err=col_err,
+                                            err_label=col_err_label, capsize=capsize,
+                                            err_kw=err_kw, width=width, label=str(col), **kwargs)
+                containers.append(container)
+            self.set_xticks(x_pos)
+            self.set_xticklabels([str(l) for l in df.index])
+            if hasattr(df.index, 'name') and df.index.name:
+                self.set_xlabel(str(df.index.name))
+            self._update_legend()
+            return containers
+
+        # Series mode
+        if _is_series(x):
+            series = x
+            lbl = kwargs.pop('label', None) or (str(series.name) if series.name is not None else None)
+            err_vals = err.values if _is_series(err) else err
+            if hasattr(series.index, 'name') and series.index.name:
+                self.set_xlabel(str(series.index.name))
+            return self._bar_array([str(l) for l in series.index], series.values,
+                                   err=err_vals, err_label=err_label, capsize=capsize,
+                                   err_kw=err_kw, label=lbl, **kwargs)
+
+        # Array mode
+        return self._bar_array(x, height, err=err, err_label=err_label,
+                               capsize=capsize, err_kw=err_kw, **kwargs)
+
+    def _bar_array(self, x, height, err=None, err_label=None, capsize=4, err_kw=None, **kwargs):
+        """Plot bars from array data."""
+        if err_kw is None:
+            err_kw = {}
+        err_kw.setdefault('color', 'black')
+        err_kw.setdefault('linewidth', 1.5)
+        if isinstance(err, tuple):
+            err = np.array([np.asarray(err[0]), np.asarray(err[1])])
+        container = super().bar(x, height, yerr=err, capsize=capsize,
+                                error_kw=err_kw, **kwargs)
+        if err is not None and err_label is not None:
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore", RuntimeWarning)
+                self.errorbar([np.nan], [np.nan], yerr=[0.5], fmt='none',
+                              color=err_kw['color'], capsize=capsize,
+                              linewidth=err_kw['linewidth'], label=err_label)
+        self._update_legend()
+        return container
+
+    def scatter(self, x, y, xerr=None, yerr=None, err_label=None, capsize=4, err_kw=None,
+                 label=None, **kwargs):
+        """Scatter plot with optional error bars in x and/or y.
+
+        Parameters
+        ----------
+        x, y : array-like
+            Data coordinates.
+        xerr : array-like or tuple of (low, high), optional
+            Horizontal error bars. Symmetric if array-like, asymmetric if tuple.
+        yerr : array-like or tuple of (low, high), optional
+            Vertical error bars. Symmetric if array-like, asymmetric if tuple.
+        err_label : str, optional
+            Legend label for the error bars (e.g. '±1 SE').
+            Only set this on one call to avoid duplicate legend entries.
+        capsize : float, default 4
+            Width of error bar caps in points.
+        err_kw : dict, optional
+            Additional keyword arguments for the error bars.
+        label : str, optional
+            Legend label for the scatter points.
+        **kwargs
+            Additional keyword arguments passed to matplotlib scatter()
+            (e.g. color, s, marker).
+        """
+        sc = super().scatter(x, y, label=label, **kwargs)
+        if xerr is not None or yerr is not None:
+            if err_kw is None:
+                err_kw = {}
+            err_kw.setdefault('fmt', 'none')
+            err_kw.setdefault('color', 'black')
+            err_kw.setdefault('linewidth', 1.5)
+            err_kw.setdefault('capsize', capsize)
+            if isinstance(xerr, tuple):
+                xerr = np.array([np.asarray(xerr[0]), np.asarray(xerr[1])])
+            if isinstance(yerr, tuple):
+                yerr = np.array([np.asarray(yerr[0]), np.asarray(yerr[1])])
+            self.errorbar(x, y, xerr=xerr, yerr=yerr, **err_kw)
+            if err_label is not None:
+                with warnings.catch_warnings():
+                    warnings.simplefilter("ignore", RuntimeWarning)
+                    self.errorbar([np.nan], [np.nan], yerr=[0.5], fmt='none',
+                                  color=err_kw['color'], capsize=capsize,
+                                  linewidth=err_kw['linewidth'], label=err_label)
+        self._update_legend()
+        return sc
+
+    def legend(self, *args, **kwargs):
+        """Override legend to include extra handles from line()/bar()/scatter() err_label."""
+        extra = getattr(self, '_clean_extra_handles', [])
+        if extra:
+            existing_handles, existing_labels = self.get_legend_handles_labels()
+            handles = existing_handles + extra
+            labels = existing_labels + [h.get_label() for h in extra]
+            return super().legend(handles, labels, *args, **kwargs)
+        return super().legend(*args, **kwargs)
+
+mprojections.register_projection(CleanAxes)
 
 
 def get_color_cycle():
@@ -92,15 +322,120 @@ def get_color_cycle():
     """
     return plt.rcParams['axes.prop_cycle'].by_key()['color']
 
-##### General stylizing of plots #####
-def default_format(ax, **kwargs):
-    decimal_format_ticks(ax)
-    sparse_ticks(ax)
-    clear_spines(ax)
-    zero_lims(ax)
-    ax.set(**kwargs)
+def _has_custom_labels(axis):
+    """Check if an axis has a non-default formatter (e.g. string labels, custom formatting).
 
-def clear_spines(ax, all=False, leave=["bottom", "left"]):
+    Returns False for matplotlib's built-in defaults (ScalarFormatter for linear,
+    LogFormatterSciNotation/LogFormatterMathtext for log scale) so clean() can
+    override them. Returns True for user-set formatters (e.g. string labels).
+    """
+    default_types = (ScalarFormatter, LogFormatterSciNotation, LogFormatterMathtext)
+    return not isinstance(axis.get_major_formatter(), default_types)
+
+def fig(rows=1, cols=1, h=None, w=None, **kwargs):
+    """Create a figure and axes with sensible default sizing.
+
+    Parameters
+    ----------
+    rows : int, default 1
+        Number of subplot rows.
+    cols : int, default 1
+        Number of subplot columns.
+    h : float, optional
+        Figure height in inches. Defaults to 4 * rows.
+    w : float, optional
+        Figure width in inches. Defaults to min(5 * cols, 10).
+    **kwargs
+        Additional keyword arguments passed to plt.subplots().
+
+    Returns
+    -------
+    fig, ax : matplotlib Figure and Axes
+    """
+    if w is None:
+        w = min(5 * cols, 10)
+    if h is None:
+        h = 4 * rows
+    subplot_kw = kwargs.pop('subplot_kw', {})
+    subplot_kw.setdefault('projection', 'cleanplots')
+    return plt.subplots(rows, cols, figsize=(w, h), subplot_kw=subplot_kw, **kwargs)
+
+##### General stylizing of plots #####
+def clean(ax, spines='bottom_left', ticks='sparse', zero_origin=False, decimals='auto', **kwargs):
+    """Format an axes for clean, publication-ready plots.
+
+    Parameters
+    ----------
+    ax : matplotlib Axes
+        The axes to format.
+    spines : str or None, default 'bottom_left'
+        Which spines to keep visible.
+        - 'bottom_left' : only bottom and left spines
+        - 'all' : all four spines
+        - 'none' or None : no spines
+    ticks : str, False, or None, default 'sparse'
+        Tick density on axes.
+        - 'sparse' : only min and max ticks on both axes
+        - 'x' : sparse on x-axis only
+        - 'y' : sparse on y-axis only
+        - False : keep all default ticks
+        - None : remove all ticks and tick labels (e.g. for images)
+    zero_origin : bool or str, default False
+        Whether axis limits start at zero.
+        - True : both axes start at 0
+        - 'x' : only x-axis starts at 0
+        - 'y' : only y-axis starts at 0
+        - False : don't modify axis limits
+    decimals : str, int, or False, default 'auto'
+        Tick label number formatting.
+        - 'auto' : integers as "5", floats with 1 decimal as "3.5"
+        - int : fixed decimal places (e.g. 2 gives "3.50"), integers still show without decimals
+        - 'sci' : scientific notation (e.g. "1.2e+03")
+        - False : keep matplotlib default formatting
+    **kwargs
+        Additional keyword arguments passed to ax.set() (e.g. xlabel, ylabel, title, xlim, ylim).
+    """
+    # Handle arrays/lists of axes (e.g. from plt.subplots(2, 3))
+    if isinstance(ax, np.ndarray):
+        for a in ax.flat:
+            clean(a, spines=spines, ticks=ticks, zero_origin=zero_origin, decimals=decimals, **kwargs)
+        return
+    if isinstance(ax, (list, tuple)):
+        for a in ax:
+            clean(a, spines=spines, ticks=ticks, zero_origin=zero_origin, decimals=decimals, **kwargs)
+        return
+
+    x_custom = _has_custom_labels(ax.xaxis)
+    y_custom = _has_custom_labels(ax.yaxis)
+    if ticks is None:
+        ax.set_xticks([])
+        ax.set_yticks([])
+    else:
+        if decimals is not False:
+            _decimal_format_ticks(ax, decimals=decimals, skip_x=x_custom, skip_y=y_custom)
+        if ticks:
+            mode = 'both' if ticks == 'sparse' else ticks
+            _sparse_ticks(ax, mode=mode, skip_x=x_custom, skip_y=y_custom)
+    if spines == 'bottom_left':
+        _clear_spines(ax)
+    elif spines == 'none' or spines is None:
+        _clear_spines(ax, all=True)
+    # spines == 'all' → do nothing (keep all spines)
+    if zero_origin is True:
+        _zero_lims(ax)
+    elif zero_origin in ('x', 'y'):
+        _zero_lims(ax, mode=zero_origin)
+    legend = ax.get_legend()
+    if legend is not None:
+        legend.set_frame_on(False)
+    if kwargs:
+        ax.set(**kwargs)
+
+def _default_format(ax, **kwargs):
+    """Deprecated: use clean() instead."""
+    clean(ax, zero_origin=True, **kwargs)
+
+def _clear_spines(ax, all=False, leave=["bottom", "left"]):
     if type(ax) not in [list,  np.ndarray]:
         ax = [ax]
     for a in ax:
@@ -111,24 +446,42 @@ def clear_spines(ax, all=False, leave=["bottom", "left"]):
                 if spine not in leave:
                     a.spines[spine].set_visible(False)
     
-def decimal_format_ticks(ax):
-    def formatter(x, pos):
-        if x == int(x):
-            return str(int(x))
-        return '{:.1f}'.format(x)
-    ax.xaxis.set_major_formatter(formatter)
-    ax.yaxis.set_major_formatter(formatter)
+def _decimal_format_ticks(ax, decimals='auto', skip_x=False, skip_y=False):
+    if decimals == 'auto':
+        def formatter(x, pos):
+            if x == int(x):
+                return str(int(x))
+            # Use g format for log-scale friendly display (e.g. 0.95 not 9.5e-01)
+            formatted = f'{x:g}'
+            if '.' not in formatted and 'e' not in formatted:
+                return formatted
+            return formatted
+    elif decimals == 'sci':
+        def formatter(x, pos):
+            return f'{x:.1e}'
+    elif isinstance(decimals, int):
+        def formatter(x, pos):
+            if x == int(x):
+                return str(int(x))
+            return f'{x:.{decimals}f}'
+    if not skip_x:
+        ax.xaxis.set_major_formatter(formatter)
+    if not skip_y:
+        ax.yaxis.set_major_formatter(formatter)
     
-def sparse_ticks(ax, mode='both'):
-    if mode == 'both':
-        ax.set_yticks([0, ax.get_yticks()[-1]])
-        ax.set_xticks([0, ax.get_xticks()[-1]])
-    elif mode == 'x':
-        ax.set_xticks([0, ax.get_xticks()[-1]])
-    elif mode == 'y':
-        ax.set_yticks([0, ax.get_yticks()[-1]])
+def _sparse_ticks(ax, mode='both', skip_x=False, skip_y=False):
+    if mode in ('both', 'x') and not skip_x:
+        xlim = ax.get_xlim()
+        xticks = [t for t in ax.get_xticks() if xlim[0] <= t <= xlim[1]]
+        if xticks:
+            ax.set_xticks([xticks[0], xticks[-1]])
+    if mode in ('both', 'y') and not skip_y:
+        ylim = ax.get_ylim()
+        yticks = [t for t in ax.get_yticks() if ylim[0] <= t <= ylim[1]]
+        if yticks:
+            ax.set_yticks([yticks[0], yticks[-1]])
         
-def zero_lims(ax, mode='both'):
+def _zero_lims(ax, mode='both'):
     if mode == 'both':
         ax.set_xlim([0, ax.get_xlim()[-1]])
         ax.set_ylim([0, ax.get_ylim()[-1]])
@@ -138,174 +491,3 @@ def zero_lims(ax, mode='both'):
         ax.set_ylim([0, ax.get_ylim()[-1]])
         
     
-###################################
-    
-AMPLITUDE_CONTRAST_MIN = 0.1
-    
-def line_plot_with_phase(line_profile, ax, width=2, amplitude_contrast_min=AMPLITUDE_CONTRAST_MIN, orient='horz'):
-    
-    interp_x = np.linspace(0, line_profile.size, 800)
-    interp_y_mag = np.interp(interp_x, np.arange(line_profile.size), np.abs(line_profile))
-    interp_y_phase = np.interp(interp_x, np.arange(line_profile.size), np.unwrap(np.angle(line_profile)))
-    interp_y = interp_y_mag * np.exp(1j * interp_y_phase)
-    if orient == 'horz':
-        points = np.abs(np.array([interp_x, interp_y]).T.reshape(-1, 1, 2))
-    else:
-        points = np.abs(np.array([interp_y, interp_x]).T.reshape(-1, 1, 2))
-    segments = np.concatenate([points[:-1], points[1:]], axis=1)
-
-    normalized_phase = (np.angle(np.mean(np.stack([interp_y[1:], interp_y[:-1]]), axis=0)) + np.pi) / (2*np.pi)
-    normalized_amplitude = np.abs(interp_y) / np.max(( np.abs(interp_y[:-1]) + np.abs(interp_y[1:])) / 2 )
-    colors = cmocean.cm.phase_r(normalized_phase)
-    colors[:, :3] = colors[:, :3] * ((1 - amplitude_contrast_min) *normalized_amplitude[1:, None] + amplitude_contrast_min)
-
-    lc = LineCollection(segments, colors=colors)
-
-
-    lc.set_linewidth(width)
-    line = ax.add_collection(lc)
-    if orient == 'horz':
-        ax.set_xlim(0, line_profile.size)
-        ax.set_ylim(0, 1.1* np.max(np.abs(line_profile)))
-        ax.set_yticks([0, np.max(np.abs(line_profile))])
-    else:
-        ax.set_ylim(0, line_profile.size)
-        ax.set_xlim(0, 1.1* np.max(np.abs(line_profile)))
-        ax.set_xticks([0, np.max(np.abs(line_profile))])    
-        
-def show_colorbar(ax, image=None, contrast_min=None, contrast_max=None, y_axis_amplitude=True,):
-    cmap_image = np.stack(100 *[cm.inferno(np.linspace(0,1,100))], axis=0).T
-    if not y_axis_amplitude:
-        cmap_image = cmap_image.T
-    ax.imshow(cmap_image,  origin='lower', aspect='auto')
-    if image is not None:
-        contrast_min, contrast_max = np.min(image), np.max(image)
-    contrast_max_int = int(np.round(contrast_max))
-    if y_axis_amplitude:
-        ax.set_ylabel('Intensity', labelpad=len(str(contrast_max_int)) * -5)
-        ax.set(yticks=[0, cmap_image.shape[0]], xticks=[], yticklabels=[0, contrast_max_int])
-    else:
-        ax.set_xlabel('Intensity', labelpad=len(str(contrast_max_int)) * -5)
-        ax.set(xticks=[0, cmap_image.shape[0]], yticks=[], xticklabels=[0, contrast_max_int])
-    
-    
-def show_phase_colorbar(ax, y_axis_amplitude=True, max_amplitude=1, amplitude_contrast_min=AMPLITUDE_CONTRAST_MIN):
-    dimensions= (200, 200)
-
-    high = cmocean.cm.phase_r(np.linspace(0, 1, dimensions[0]))[..., :3]
-    shading = np.linspace(amplitude_contrast_min, 1, dimensions[1])
-    shading[0] = 0 # always make 0 amplitude black
-    shaded_color = shading[:, None, None] * high[None]
-    colorbar = np.swapaxes(shaded_color, 0, 1)
-    if not y_axis_amplitude:
-        colorbar = np.swapaxes(colorbar, 0, 1)
-    ax.imshow(colorbar, origin='lower', aspect='auto')
-    if not y_axis_amplitude:
-        ax.set(yticks=[0, shading.size], yticklabels=[0, max_amplitude], ylabel='Amplitude',
-          xticks=[0, high.shape[0]], xticklabels=['0', '2$\pi$'], xlabel='Phase')
-    else:
-        ax.set(xticks=[0, shading.size], xticklabels=[0, max_amplitude], xlabel='Amplitude',
-          yticks=[0, high.shape[0]], yticklabels=['0', '2$\pi$'], ylabel='Phase')
-
-
-    
-def show_complex_image(image, ax=None, amplitude_contrast_min=AMPLITUDE_CONTRAST_MIN, pixel_size_um=None):
-    if ax is None:
-        fig, ax = plt.subplots()
-    amplitude_contrast_max = np.max(np.abs(image))
-    alpha = amplitude_contrast_min + (np.abs(image) / amplitude_contrast_max) * (1 - amplitude_contrast_min)
-    alpha[np.abs(image) == 0] = 0 #true balck for background
-    converted = cmocean.cm.phase_r((np.pi + np.angle(image)) / (np.pi * 2), alpha=alpha)
-    black = np.zeros_like(converted)
-    black[..., -1] = 1 # non transparent
-    ax.imshow(black, interpolation='nearest')
-    ax.imshow(converted, interpolation='nearest')
-    ax.set(xticks=[], yticks=[], xlim=[0, image.shape[1]], ylim=[0, image.shape[0]]) #fill whole axis
-    ax.spines['right'].set_visible(False)
-    ax.spines['bottom'].set_visible(False)
-    ax.spines['top'].set_visible(False)
-    ax.spines['left'].set_visible(False)
-    if pixel_size_um is not None:
-        add_scalebar(ax, converted, pixel_size_um)
-
-
-def show_image(image, ax=None, contrast_max=None, contrast_min=None, name='', colorbar=True, origin='upper', pixel_size_um=None,
-               cmap='inferno',
-              **kwargs):
-    if ax is None:
-        fig, ax = plt.subplots()
-    im = ax.imshow(image, cmap=cmap, vmin=contrast_min, vmax=contrast_max, origin=origin,
-                  interpolation='nearest')
-    ax.spines['right'].set_visible(False)
-    ax.spines['bottom'].set_visible(False)
-    ax.spines['top'].set_visible(False)
-    ax.spines['left'].set_visible(False)
-    ax.set_title(name)
-    ax.set(xticks=[], yticks=[])
-    ax.set(xlim=[-0.5, image.shape[1] - 0.5], ylim=[-0.5, image.shape[0] - 0.5]) #fill whole axis
-    if origin == 'upper':
-        ax.set(ylim=[image.shape[0] - 0.5, -0.5]) #fill whole axis
-    if colorbar:
-        plt.colorbar(im, ax=ax)
-    if pixel_size_um is not None:
-        add_scalebar(ax, image, pixel_size_um)
-    ax.set(**kwargs)
-    return im
-    
-def add_scalebar(ax, im, pixel_size_um, image_fraction=0.3):
-    #infer the best roundish number for the scalebar extent
-    desired_size_um = im.shape[0] * image_fraction * pixel_size_um
-    min_base_10 = np.floor(np.log10(desired_size_um))
-    scalebar_size_um = int(np.round(desired_size_um / 10 ** min_base_10) * 10 ** min_base_10)
-    scalebar_in_pix = scalebar_size_um / pixel_size_um
-    # add scalebar to axes
-    scalebar_in_pix = (0.175 * scalebar_in_pix, scalebar_in_pix)                
-    scalebar_text = '{} µm'.format(scalebar_size_um)
-    
-    scalebar = AnchoredSizeBar(ax.transData,
-                           scalebar_in_pix[1], scalebar_text, 'lower right', label_top=True,
-                           pad=0.8, color='white', frameon=False, size_vertical=scalebar_in_pix[0],
-                           fontproperties=fm.FontProperties(size=14))
-    ax.add_artist(scalebar)
-        
-def show_histogram(ax, data, bins, name):
-    im = ax.hist(np.ravel(data), bins, density=True)
-    ax.set_ylabel('Probability')
-    ax.set_title(name)
-    
-    
-def plot_line(x, y, ax=None, **kwargs):
-    if ax is None:
-        fig, ax = plt.subplots()
-    ax.plot(x, y)
-    default_format(ax)
-
-    ax.set(**kwargs)
-    
-
-def ipympl_fig(**kwargs):
-    # Workaround for creating ipympl figures that allows them to
-    # be created an run from same cell
-    with plt.ioff():
-        fig = plt.figure(**kwargs)
-    canvas = fig.canvas
-    display(canvas)
-    if hasattr(canvas, '_handle_message'):
-        canvas._handle_message(canvas, {'type': 'send_image_mode'}, [])
-        canvas._handle_message(canvas, {'type':'refresh'}, [])
-        canvas._handle_message(canvas,{'type': 'initialized'},[])
-        canvas._handle_message(canvas,{'type': 'draw'},[])
-    return fig
-
-def ipympl_subplots(*args, **kwargs):
-    # Workaround for creating ipympl figures that allows them to
-    # be created an run from same cell
-    with plt.ioff():
-        fig, ax = plt.subplots(*args, **kwargs)
-    canvas = fig.canvas
-    display(canvas)
-    canvas._handle_message(canvas, {'type': 'send_image_mode'}, [])
-    canvas._handle_message(canvas, {'type':'refresh'}, [])
-    canvas._handle_message(canvas,{'type': 'initialized'},[])
-    canvas._handle_message(canvas,{'type': 'draw'},[])
-    return fig, ax
