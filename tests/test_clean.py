@@ -341,6 +341,60 @@ class TestLine:
         assert lines[0].get_linewidth() == 5
         assert lines[0].get_marker() == 'o'
 
+    def test_single_arg_y_only(self):
+        f, ax = fig()
+        lines = ax.line([10, 20, 30])
+        assert len(ax.get_lines()) == 1
+        y_data = ax.get_lines()[0].get_ydata()
+        assert list(y_data) == [10, 20, 30]
+        x_data = ax.get_lines()[0].get_xdata()
+        assert list(x_data) == [0, 1, 2]
+
+    def test_single_arg_with_label(self):
+        f, ax = fig()
+        ax.line([1, 2, 3], label='train')
+        labels = [t.get_text() for t in ax.get_legend().get_texts()]
+        assert labels == ['train']
+
+    def test_multi_line_list(self):
+        f, ax = fig()
+        lines = ax.line([[1, 2, 3], [4, 5, 6]], label=['A', 'B'])
+        assert len(ax.get_lines()) == 2
+        labels = [t.get_text() for t in ax.get_legend().get_texts()]
+        assert labels == ['A', 'B']
+
+    def test_multi_line_infers_x(self):
+        f, ax = fig()
+        ax.line([[10, 20], [30, 40]])
+        x_data = ax.get_lines()[0].get_xdata()
+        assert list(x_data) == [0, 1]
+
+    def test_multi_line_with_err(self):
+        f, ax = fig()
+        ax.line([[1, 2, 3], [4, 5, 6]],
+                err=[[0.1, 0.1, 0.1], [0.2, 0.2, 0.2]],
+                label=['A', 'B'])
+        assert len(ax.collections) == 2  # two fill_betweens
+
+    def test_multi_line_shared_err_label(self):
+        f, ax = fig()
+        ax.line([[1, 2], [3, 4]],
+                err=[[0.1, 0.1], [0.1, 0.1]],
+                label=['A', 'B'], err_label='±1 SD')
+        labels = [t.get_text() for t in ax.get_legend().get_texts()]
+        assert labels.count('±1 SD') == 1
+        assert 'A' in labels
+        assert 'B' in labels
+
+    def test_multi_line_per_line_err_labels(self):
+        f, ax = fig()
+        ax.line([[1, 2], [3, 4]],
+                err=[[0.1, 0.1], [0.1, 0.1]],
+                label=['A', 'B'], err_label=['SE(A)', 'SE(B)'])
+        labels = [t.get_text() for t in ax.get_legend().get_texts()]
+        assert 'SE(A)' in labels
+        assert 'SE(B)' in labels
+
 
 # --- CleanAxes.bars() ---
 
@@ -375,6 +429,47 @@ class TestBar:
         import matplotlib.colors
         patch_color = matplotlib.colors.to_rgb(ax.patches[0].get_facecolor())
         assert np.allclose(patch_color, matplotlib.colors.to_rgb('red'), atol=0.01)
+
+    def test_single_arg_numeric_heights(self):
+        f, ax = fig()
+        ax.bar([3, 5, 7])
+        assert len(ax.patches) == 3
+        # Heights should be 3, 5, 7
+        heights = [p.get_height() for p in ax.patches]
+        assert heights == [3, 5, 7]
+
+    def test_single_arg_with_err(self):
+        f, ax = fig()
+        ax.bar([3, 5, 7], err=[0.1, 0.2, 0.3])
+        assert len(ax.patches) == 3
+        assert len(ax.lines) > 0
+
+
+# --- CleanAxes.scatter() ---
+
+class TestScatter:
+    def test_basic_scatter(self):
+        f, ax = fig()
+        ax.scatter([0, 1, 2], [3, 4, 5])
+        assert len(ax.collections) >= 1
+
+    def test_matrix_nx2(self):
+        f, ax = fig()
+        data = np.array([[0, 1], [2, 3], [4, 5]])
+        ax.scatter(data)
+        assert len(ax.collections) >= 1
+
+    def test_matrix_nx3_uses_size(self):
+        f, ax = fig()
+        data = np.array([[0, 1, 10], [2, 3, 20], [4, 5, 30]])
+        ax.scatter(data)
+        sizes = ax.collections[0].get_sizes()
+        assert np.allclose(sizes, [10, 20, 30])
+
+    def test_matrix_bad_shape_raises(self):
+        f, ax = fig()
+        with pytest.raises(ValueError):
+            ax.scatter(np.array([[1, 2, 3, 4]]))
 
 
 # --- DataFrame / Series support ---
@@ -432,6 +527,226 @@ class TestDataFrameLine:
         assert ax.get_xlabel() == 'epoch'
 
 
+class TestPivotLine:
+    def test_pivot_basic(self):
+        import pandas as pd
+        df = pd.DataFrame({
+            'train': [[1, 2, 3], [4, 5, 6]],
+            'val': [[1.5, 2.5, 3.5], [4.5, 5.5, 6.5]],
+        }, index=['mlp', 'transformer'])
+        f, ax = fig()
+        ax.line(df)
+        # 2 rows * 2 cols = 4 data lines + 2 color legend + 2 style legend = 8
+        assert len(ax.get_lines()) == 8
+
+    def test_pivot_colors_match_index(self):
+        import pandas as pd
+        from cleanplots import get_color_cycle
+        df = pd.DataFrame({
+            'train': [[1, 2], [3, 4]],
+        }, index=['mlp', 'transformer'])
+        f, ax = fig()
+        ax.line(df)
+        cycle = get_color_cycle()
+        # First data line should be first color, second should be second
+        assert ax.get_lines()[0].get_color() == cycle[0]
+        assert ax.get_lines()[1].get_color() == cycle[1]
+
+    def test_pivot_linestyles_match_columns(self):
+        import pandas as pd
+        df = pd.DataFrame({
+            'train': [[1, 2]],
+            'val': [[3, 4]],
+        }, index=['mlp'])
+        f, ax = fig()
+        ax.line(df)
+        assert ax.get_lines()[0].get_linestyle() == '-'
+        assert ax.get_lines()[1].get_linestyle() == '--'
+
+    def test_pivot_with_shared_x(self):
+        import pandas as pd
+        df = pd.DataFrame({
+            'train': [[1, 2, 3]],
+        }, index=['mlp'])
+        f, ax = fig()
+        ax.line([10, 20, 30], df)
+        x_data = ax.get_lines()[0].get_xdata()
+        assert list(x_data) == [10, 20, 30]
+
+    def test_pivot_with_per_row_x(self):
+        import pandas as pd
+        df = pd.DataFrame({
+            'train': [[1, 2], [3, 4]],
+        }, index=['mlp', 'transformer'])
+        f, ax = fig()
+        ax.line({'mlp': [0, 1], 'transformer': [10, 20]}, df)
+        assert list(ax.get_lines()[0].get_xdata()) == [0, 1]
+        assert list(ax.get_lines()[1].get_xdata()) == [10, 20]
+
+    def test_pivot_with_err(self):
+        import pandas as pd
+        df = pd.DataFrame({
+            'train': [[1, 2, 3]],
+        }, index=['mlp'])
+        err_df = pd.DataFrame({
+            'train': [[0.1, 0.2, 0.3]],
+        }, index=['mlp'])
+        f, ax = fig()
+        ax.line(df, err=err_df, err_label='±1 SD')
+        assert len(ax.collections) == 1  # one fill_between
+        labels = [t.get_text() for t in ax.get_legend().get_texts()]
+        assert '±1 SD' in labels
+
+    def test_pivot_legend_has_index_and_columns(self):
+        import pandas as pd
+        df = pd.DataFrame({
+            'train': [[1, 2], [3, 4]],
+            'val': [[5, 6], [7, 8]],
+        }, index=['mlp', 'transformer'])
+        f, ax = fig()
+        ax.line(df)
+        labels = [t.get_text() for t in ax.get_legend().get_texts()]
+        assert 'mlp' in labels
+        assert 'transformer' in labels
+        assert 'train' in labels
+        assert 'val' in labels
+
+    def test_pivot_x_inferred_as_range(self):
+        import pandas as pd
+        df = pd.DataFrame({
+            'train': [[10, 20, 30]],
+        }, index=['mlp'])
+        f, ax = fig()
+        ax.line(df)
+        x_data = ax.get_lines()[0].get_xdata()
+        assert list(x_data) == [0, 1, 2]
+
+    def test_pivot_single_column_ylabel(self):
+        import pandas as pd
+        df = pd.DataFrame({
+            'val_loss_history': [[1, 2, 3], [4, 5, 6]],
+        }, index=['mlp', 'transformer'])
+        f, ax = fig()
+        ax.line(df)
+        assert ax.get_ylabel() == 'val_loss_history'
+        # Column name should NOT be in legend
+        labels = [t.get_text() for t in ax.get_legend().get_texts()]
+        assert 'val_loss_history' not in labels
+        assert 'mlp' in labels
+        assert 'transformer' in labels
+
+
+# --- CleanAxes.heatmap() ---
+
+class TestHeatmap:
+    def test_basic_array(self):
+        f, ax = fig()
+        data = np.array([[1, 2], [3, 4]])
+        im = ax.heatmap(data)
+        assert im is not None
+
+    def test_dataframe_labels(self):
+        import pandas as pd
+        df = pd.DataFrame({'A': [1, 2], 'B': [3, 4]}, index=['x', 'y'])
+        f, ax = fig()
+        ax.heatmap(df)
+        xtick_labels = [t.get_text() for t in ax.get_xticklabels()]
+        ytick_labels = [t.get_text() for t in ax.get_yticklabels()]
+        assert xtick_labels == ['A', 'B']
+        assert ytick_labels == ['x', 'y']
+
+    def test_annotations(self):
+        f, ax = fig()
+        data = np.array([[1.5, 2.5]])
+        ax.heatmap(data, annotate=True, fmt='.1f')
+        texts = [t for t in ax.texts]
+        assert len(texts) == 2
+        assert texts[0].get_text() == '1.5'
+
+    def test_no_annotations(self):
+        f, ax = fig()
+        ax.heatmap(np.array([[1, 2]]), annotate=False)
+        assert len(ax.texts) == 0
+
+    def test_no_cbar(self):
+        f, ax = fig()
+        ax.heatmap(np.array([[1, 2]]), cbar=False)
+        # Only one axes (no colorbar axes)
+        assert len(f.axes) == 1
+
+
+# --- CleanAxes.box() ---
+
+class TestBox:
+    def test_list_of_arrays(self):
+        f, ax = fig()
+        data = [np.random.randn(50), np.random.randn(50)]
+        bp = ax.box(data)
+        assert 'boxes' in bp
+        assert len(bp['boxes']) == 2
+
+    def test_dict_mode(self):
+        f, ax = fig()
+        bp = ax.box({'A': np.random.randn(50), 'B': np.random.randn(50)})
+        assert len(bp['boxes']) == 2
+        labels = [t.get_text() for t in ax.get_xticklabels()]
+        assert labels == ['A', 'B']
+
+    def test_scalar_dataframe(self):
+        import pandas as pd
+        df = pd.DataFrame({'A': np.random.randn(50), 'B': np.random.randn(50)})
+        f, ax = fig()
+        bp = ax.box(df)
+        assert len(bp['boxes']) == 2
+
+    def test_pivot_grouped(self):
+        import pandas as pd
+        df = pd.DataFrame({
+            'metric1': [np.random.randn(30), np.random.randn(30)],
+            'metric2': [np.random.randn(30), np.random.randn(30)],
+        }, index=['mlp', 'transformer'])
+        f, ax = fig()
+        bp = ax.box(df)
+        # 2 rows * 2 cols = 4 boxes
+        assert len(bp['boxes']) == 4
+
+    def test_pivot_single_col_ylabel(self):
+        import pandas as pd
+        df = pd.DataFrame({
+            'accuracy': [np.random.randn(30), np.random.randn(30)],
+        }, index=['mlp', 'transformer'])
+        f, ax = fig()
+        ax.box(df)
+        assert ax.get_ylabel() == 'accuracy'
+
+
+# --- CleanAxes.violin() ---
+
+class TestViolin:
+    def test_dict_mode(self):
+        f, ax = fig()
+        vp = ax.violin({'A': np.random.randn(50), 'B': np.random.randn(50)})
+        assert 'bodies' in vp
+        assert len(vp['bodies']) == 2
+
+    def test_scalar_dataframe(self):
+        import pandas as pd
+        df = pd.DataFrame({'A': np.random.randn(50), 'B': np.random.randn(50)})
+        f, ax = fig()
+        vp = ax.violin(df)
+        assert len(vp['bodies']) == 2
+
+    def test_pivot_grouped(self):
+        import pandas as pd
+        df = pd.DataFrame({
+            'metric1': [np.random.randn(30), np.random.randn(30)],
+            'metric2': [np.random.randn(30), np.random.randn(30)],
+        }, index=['mlp', 'transformer'])
+        f, ax = fig()
+        vp = ax.violin(df)
+        assert len(vp['bodies']) == 4
+
+
 class TestDataFrameBar:
     def test_dataframe_grouped_bars(self):
         import pandas as pd
@@ -472,6 +787,60 @@ class TestDataFrameBar:
         f, ax = fig()
         ax.bar(df)
         assert ax.get_xlabel() == 'category'
+
+
+# --- CleanAxes.color_labels() ---
+
+class TestColorLabels:
+    def test_single_label(self):
+        f, ax = fig()
+        texts = ax.color_labels('MLP')
+        assert len(texts) == 1
+        assert texts[0].get_text() == 'MLP'
+
+    def test_multiple_labels(self):
+        f, ax = fig()
+        texts = ax.color_labels(['MLP', 'RF', 'GB'])
+        assert len(texts) == 3
+        assert [t.get_text() for t in texts] == ['MLP', 'RF', 'GB']
+
+    def test_colors_from_cycle(self):
+        from cleanplots import get_color_cycle
+        f, ax = fig()
+        texts = ax.color_labels(['A', 'B'])
+        cycle = get_color_cycle()
+        assert texts[0].get_color() == cycle[0]
+        assert texts[1].get_color() == cycle[1]
+
+    def test_custom_colors(self):
+        f, ax = fig()
+        texts = ax.color_labels(['A', 'B'], colors=['red', 'blue'])
+        assert texts[0].get_color() == 'red'
+        assert texts[1].get_color() == 'blue'
+
+    def test_custom_position(self):
+        f, ax = fig()
+        texts = ax.color_labels('A', x=0.1, y=0.5)
+        pos = texts[0].get_position()
+        assert pos == (0.1, 0.5)
+
+    def test_vertical_stacking(self):
+        f, ax = fig()
+        texts = ax.color_labels(['A', 'B', 'C'])
+        positions = [t.get_position() for t in texts]
+        # All same x, decreasing y
+        assert all(p[0] == positions[0][0] for p in positions)
+        assert positions[0][1] > positions[1][1] > positions[2][1]
+
+    def test_uses_axes_transform(self):
+        f, ax = fig()
+        texts = ax.color_labels('A')
+        assert texts[0].get_transform() == ax.transAxes
+
+    def test_kwargs_passthrough(self):
+        f, ax = fig()
+        texts = ax.color_labels('A', fontweight='bold')
+        assert texts[0].get_fontweight() == 'bold'
 
 
 # --- Style ---
