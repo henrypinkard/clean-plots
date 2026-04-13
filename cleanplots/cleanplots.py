@@ -30,7 +30,8 @@ __all__ = [
 # Default color cycle
 # https://davidmathlogic.com/colorblind/#%23179EE8-%235A00A0-%2321CA10-%23FF005B-%23D40E9F-%235A5A5A-%23DCCC02-%23FF7400
 colors =  ['#179EE8', '#57B50F', '#5A00A0', '#419292',
-           '#D900FF', '#F37C2F', '#ACAD9D', '#FF005B',]
+           '#D900FF', '#F37C2F', '#ACAD9D', '#FF005B',
+           '#E8B70F', '#8B4513',]
 
 SMALL_SIZE = 14
 MEDIUM_SIZE = 18
@@ -85,6 +86,21 @@ def _is_series(obj):
     """Check if obj is a pandas Series (duck-typed, no pandas import required)."""
     return hasattr(obj, 'index') and hasattr(obj, 'values') and hasattr(obj, 'name') and not hasattr(obj, 'columns')
 
+def _split_asymmetric_err(err):
+    """Detect Nx2 array error and split into (low, high) tuple.
+
+    Accepts: tuple of (low, high), Nx2 ndarray, or symmetric array.
+    Returns the error in a normalized form that downstream code can handle.
+    """
+    if err is None:
+        return err
+    if isinstance(err, tuple):
+        return err
+    arr = np.asarray(err)
+    if arr.ndim == 2 and arr.shape[1] == 2:
+        return (arr[:, 0], arr[:, 1])
+    return err
+
 
 class CleanAxes(Axes):
     """Axes subclass with convenience methods for clean plotting."""
@@ -96,6 +112,8 @@ class CleanAxes(Axes):
 
     def _update_legend(self):
         """Rebuild legend if any labels exist."""
+        if getattr(self, '_cleanplots_no_legend', False):
+            return
         handles, labels = self.get_legend_handles_labels()
         extra = getattr(self, '_clean_extra_handles', [])
         all_handles = handles + extra
@@ -103,7 +121,7 @@ class CleanAxes(Axes):
         if all_labels:
             super().legend(all_handles, all_labels)
 
-    def line(self, x, y=None, err=None, label=None, err_label=None, err_alpha=0.2, **kwargs):
+    def line(self, x, y=None, err=None, label=None, err_label=None, err_alpha=0.2, legend=True, log_x=False, log_y=False, **kwargs):
         """Plot a line with optional shaded confidence interval.
 
         Parameters
@@ -145,6 +163,12 @@ class CleanAxes(Axes):
             Additional keyword arguments passed to plot()
             (e.g. color, linewidth, marker, alpha).
         """
+        if not legend:
+            self._cleanplots_no_legend = True
+        if log_x:
+            self.set_xscale('log')
+        if log_y:
+            self.set_yscale('log')
         # DataFrame mode — check both arg positions: line(df) or line(x, df)
         df = None
         x_values = None
@@ -165,27 +189,68 @@ class CleanAxes(Axes):
                 return self._line_pivot(df, x_values=x_values, err=err, err_label=err_label,
                                         err_alpha=err_alpha, **kwargs)
 
+            # MultiIndex columns: top level → line styles, remaining → colors
+            if getattr(df.columns, 'nlevels', 1) > 1:
+                return self._line_wide_multi(df, err=err, err_label=err_label,
+                                             err_alpha=err_alpha, **kwargs)
+
             # Scalar DataFrame mode: each column is a line, index is x
             all_lines = []
+            user_color = kwargs.get('color', None)
             for i, col in enumerate(df.columns):
                 col_err = err[col] if (_is_dataframe(err) and col in err.columns) else None
                 col_err_label = self._resolve_err_label(err_label, i, len(df.columns))
+                # If user passed color= and label=, suppress per-column labels
+                col_label = None if (user_color is not None and label is not None) else str(col)
+                kw = dict(kwargs)
+                # When color is explicit and multiple columns, differentiate by linestyle
+                if user_color is not None and len(df.columns) > 1:
+                    kw['linestyle'] = self._LINE_STYLES[i % len(self._LINE_STYLES)]
                 lines = self._line_array(df.index, df[col].values, err=col_err,
-                                         label=str(col), err_label=col_err_label,
-                                         err_alpha=err_alpha, **kwargs)
+                                         label=col_label, err_label=col_err_label,
+                                         err_alpha=err_alpha, **kw)
                 all_lines.extend(lines)
+            # When color= and label= are both set, add one color entry + column style entries
+            if user_color is not None and label is not None:
+                self.plot([], [], color=user_color, linestyle='-', label=label)
+                if len(df.columns) > 1:
+                    existing_labels = {t.get_label() for t in self.get_lines()}
+                    for j, col in enumerate(df.columns):
+                        linestyle = self._LINE_STYLES[j % len(self._LINE_STYLES)]
+                        if str(col) not in existing_labels:
+                            self.plot([], [], color='black', linestyle=linestyle, label=str(col))
             if hasattr(df.index, 'name') and df.index.name:
                 self.set_xlabel(str(df.index.name))
             self._update_legend()
             return all_lines
 
+        # Series-of-arrays mode: each row is a separate line. Convert to a
+        # single-column pivot DataFrame and dispatch to _line_pivot. Handles
+        # both line(series) and line(x, series).
+        series_y = None
+        x_for_series = None
+        if _is_series(y) and len(y) > 0 and isinstance(y.iloc[0], (list, np.ndarray)):
+            series_y = y
+            x_for_series = x
+        elif _is_series(x) and y is None and len(x) > 0 and isinstance(x.iloc[0], (list, np.ndarray)):
+            series_y = x
+        if series_y is not None:
+            df_y = series_y.to_frame()
+            err_arg = err
+            if _is_series(err) and len(err) > 0 and isinstance(err.iloc[0], (list, np.ndarray)):
+                err_arg = err.to_frame()
+            return self._line_pivot(df_y, x_values=x_for_series, err=err_arg,
+                                    err_label=err_label, err_alpha=err_alpha, **kwargs)
+
         # Series mode: use index as x, values as y
         if _is_series(x):
             series = x
-            lbl = label if label is not None else (str(series.name) if series.name is not None else None)
+            lbl = label
             err_vals = err.values if _is_series(err) else err
             if hasattr(series.index, 'name') and series.index.name:
                 self.set_xlabel(str(series.index.name))
+            if series.name is not None:
+                self.set_ylabel(str(series.name))
             return self._line_array(series.index, series.values, err=err_vals,
                                     label=lbl, err_label=err_label, err_alpha=err_alpha, **kwargs)
 
@@ -247,6 +312,7 @@ class CleanAxes(Axes):
         lines = self.plot(x, y, label=label, **kwargs)
         color = lines[0].get_color()
         if err is not None:
+            err = _split_asymmetric_err(err)
             if isinstance(err, tuple):
                 low, high = np.asarray(err[0]), np.asarray(err[1])
             else:
@@ -290,9 +356,11 @@ class CleanAxes(Axes):
         cycle = get_color_cycle()
         all_lines = []
         first_err = True
+        user_color = kwargs.pop('color', None)
+        user_label = kwargs.pop('label', None)
 
         for i, row_key in enumerate(df.index):
-            color = cycle[i % len(cycle)]
+            color = user_color if user_color is not None else cycle[i % len(cycle)]
             for j, col in enumerate(df.columns):
                 y_data = np.asarray(df.loc[row_key, col])
                 linestyle = self._LINE_STYLES[j % len(self._LINE_STYLES)]
@@ -325,24 +393,103 @@ class CleanAxes(Axes):
                                          err_label=el, err_alpha=err_alpha, **kw)
                 all_lines.extend(lines)
 
-        # Build legend: color entries for index
-        for i, row_key in enumerate(df.index):
-            color = cycle[i % len(cycle)]
-            self.plot([], [], color=color, linestyle='-', label=str(row_key))
+        # Legend: color entries for index
+        if user_color is not None and user_label is not None:
+            # Single color with explicit label: one color legend entry
+            self.plot([], [], color=user_color, linestyle='-', label=user_label)
+        elif user_color is None:
+            for i, row_key in enumerate(df.index):
+                color = cycle[i % len(cycle)]
+                self.plot([], [], color=color, linestyle='-', label=str(row_key))
 
         # Single column: use column name as ylabel instead of legend entry
         if len(df.columns) == 1:
             self.set_ylabel(str(df.columns[0]))
         else:
-            # Multiple columns: add linestyle legend entries
+            # Multiple columns: add linestyle legend entries (always black, deduplicated)
+            existing_labels = {t.get_label() for t in self.get_lines()}
             for j, col in enumerate(df.columns):
                 linestyle = self._LINE_STYLES[j % len(self._LINE_STYLES)]
-                self.plot([], [], color='black', linestyle=linestyle, label=str(col))
+                if str(col) not in existing_labels:
+                    self.plot([], [], color='black', linestyle=linestyle, label=str(col))
 
         self._update_legend()
         return all_lines
 
-    def bar(self, x, height=None, err=None, err_label=None, capsize=4, err_kw=None, **kwargs):
+    def _line_wide_multi(self, df, err=None, err_label=None, err_alpha=0.2, **kwargs):
+        """Plot a scalar-cell DataFrame with MultiIndex columns.
+
+        Top column level → line styles, remaining levels → colors.
+        If color= is passed explicitly, all lines use that color
+        (no per-group color legend).
+        """
+        cycle = get_color_cycle()
+        all_lines = []
+        first_err = True
+        user_color = kwargs.pop('color', None)
+        user_label = kwargs.pop('label', None)
+
+        top_values = df.columns.get_level_values(0).unique()
+
+        # Group keys from remaining column levels
+        sub0 = df.xs(top_values[0], level=0, axis=1)
+        group_keys = sub0.columns.tolist()
+
+        for i, gk in enumerate(group_keys):
+            color = user_color if user_color is not None else cycle[i % len(cycle)]
+            for j, tv in enumerate(top_values):
+                linestyle = self._LINE_STYLES[j % len(self._LINE_STYLES)]
+                sub = df.xs(tv, level=0, axis=1)
+                y_data = sub[gk].values
+
+                cell_err = None
+                if _is_dataframe(err):
+                    err_sub = err.xs(tv, level=0, axis=1)
+                    cell_err = err_sub[gk].values
+
+                el = None
+                if cell_err is not None and err_label is not None and first_err:
+                    el = err_label
+                    first_err = False
+
+                kw = dict(kwargs)
+                kw['color'] = color
+                kw['linestyle'] = linestyle
+                lines = self._line_array(df.index, y_data, err=cell_err,
+                                         err_label=el, err_alpha=err_alpha, **kw)
+                all_lines.extend(lines)
+
+        # Legend: color entries for groups
+        if user_color is not None and user_label is not None:
+            # Single color with explicit label: one color legend entry
+            self.plot([], [], color=user_color, linestyle='-', label=user_label)
+        elif user_color is None:
+            # Auto-colored groups: one entry per group
+            for i, gk in enumerate(group_keys):
+                color = cycle[i % len(cycle)]
+                if isinstance(gk, tuple):
+                    label_str = ', '.join(str(v) for v in gk)
+                else:
+                    label_str = str(gk)
+                self.plot([], [], color=color, linestyle='-', label=label_str)
+
+        # Line style entries for top level (always black, deduplicated)
+        if len(top_values) > 1:
+            existing_labels = {t.get_label() for t in self.get_lines()}
+            for j, tv in enumerate(top_values):
+                linestyle = self._LINE_STYLES[j % len(self._LINE_STYLES)]
+                if str(tv) not in existing_labels:
+                    self.plot([], [], color='black', linestyle=linestyle, label=str(tv))
+        else:
+            self.set_ylabel(str(top_values[0]))
+
+        if hasattr(df.index, 'name') and df.index.name:
+            self.set_xlabel(str(df.index.name))
+
+        self._update_legend()
+        return all_lines
+
+    def bar(self, x, height=None, err=None, err_label=None, capsize=4, err_kw=None, legend=True, log_y=False, **kwargs):
         """Plot a bar chart with optional error bars.
 
         Parameters
@@ -369,6 +516,10 @@ class CleanAxes(Axes):
         **kwargs
             Additional keyword arguments passed to matplotlib bar().
         """
+        if not legend:
+            self._cleanplots_no_legend = True
+        if log_y:
+            self.set_yscale('log')
         # DataFrame mode: grouped bars
         if _is_dataframe(x):
             df = x
@@ -394,10 +545,12 @@ class CleanAxes(Axes):
         # Series mode
         if _is_series(x):
             series = x
-            lbl = kwargs.pop('label', None) or (str(series.name) if series.name is not None else None)
+            lbl = kwargs.pop('label', None)
             err_vals = err.values if _is_series(err) else err
             if hasattr(series.index, 'name') and series.index.name:
                 self.set_xlabel(str(series.index.name))
+            if series.name is not None:
+                self.set_ylabel(str(series.name))
             return self._bar_array([str(l) for l in series.index], series.values,
                                    err=err_vals, err_label=err_label, capsize=capsize,
                                    err_kw=err_kw, label=lbl, **kwargs)
@@ -417,6 +570,7 @@ class CleanAxes(Axes):
             err_kw = {}
         err_kw.setdefault('color', 'black')
         err_kw.setdefault('linewidth', 1.5)
+        err = _split_asymmetric_err(err)
         if isinstance(err, tuple):
             err = np.array([np.asarray(err[0]), np.asarray(err[1])])
         container = super().bar(x, height, yerr=err, capsize=capsize,
@@ -430,16 +584,117 @@ class CleanAxes(Axes):
         self._update_legend()
         return container
 
+    def barh(self, y, width=None, err=None, err_label=None, capsize=4, err_kw=None,
+             legend=True, log_x=False, **kwargs):
+        """Horizontal bar chart with optional error bars.
+
+        Parameters
+        ----------
+        y : array-like, Series, or DataFrame
+            If numeric array-like and width is None, treated as bar widths
+            with y positions inferred as 0, 1, 2, ...
+            If array-like and width is provided, used as bar positions/labels.
+            If Series, uses index as labels and values as widths.
+            If DataFrame, plots grouped bars with one group per column, using
+            the index as labels and column names as legend entries.
+        width : array-like, optional
+            Bar widths. If None and y is numeric, y is used as widths.
+        err : array-like, tuple of (low, high), Series, or DataFrame, optional
+            Error bar data.
+        err_label : str, optional
+            Legend label for the error bars.
+        capsize : float, default 4
+            Width of error bar caps in points.
+        err_kw : dict, optional
+            Additional keyword arguments for the error bars.
+        **kwargs
+            Additional keyword arguments passed to matplotlib barh().
+        """
+        if not legend:
+            self._cleanplots_no_legend = True
+        if log_x:
+            self.set_xscale('log')
+        # DataFrame mode: grouped bars
+        if _is_dataframe(y):
+            df = y
+            n_groups = len(df.columns)
+            y_pos = np.arange(len(df.index))
+            height = 0.8 / n_groups
+            containers = []
+            for i, col in enumerate(df.columns):
+                col_err = err[col].values if (_is_dataframe(err) and col in err.columns) else None
+                col_err_label = err_label if (i == 0 and err_label is not None) else None
+                offset = (i - (n_groups - 1) / 2) * height
+                container = self._barh_array(y_pos + offset, df[col].values, err=col_err,
+                                             err_label=col_err_label, capsize=capsize,
+                                             err_kw=err_kw, height=height, label=str(col), **kwargs)
+                containers.append(container)
+            self.set_yticks(y_pos)
+            self.set_yticklabels([str(l) for l in df.index])
+            if hasattr(df.index, 'name') and df.index.name:
+                self.set_ylabel(str(df.index.name))
+            self._update_legend()
+            return containers
+
+        # Series mode
+        if _is_series(y):
+            series = y
+            lbl = kwargs.pop('label', None)
+            err_vals = err.values if _is_series(err) else err
+            if hasattr(series.index, 'name') and series.index.name:
+                self.set_ylabel(str(series.index.name))
+            if series.name is not None:
+                self.set_xlabel(str(series.name))
+            return self._barh_array([str(l) for l in series.index], series.values,
+                                    err=err_vals, err_label=err_label, capsize=capsize,
+                                    err_kw=err_kw, label=lbl, **kwargs)
+
+        # Single-argument mode: numeric array as widths, infer y
+        if width is None:
+            width = np.asarray(y)
+            y = np.arange(len(width))
+
+        # Array mode
+        return self._barh_array(y, width, err=err, err_label=err_label,
+                                capsize=capsize, err_kw=err_kw, **kwargs)
+
+    def _barh_array(self, y, width, err=None, err_label=None, capsize=4, err_kw=None, **kwargs):
+        """Plot horizontal bars from array data."""
+        if err_kw is None:
+            err_kw = {}
+        err_kw.setdefault('color', 'black')
+        err_kw.setdefault('linewidth', 1.5)
+        err = _split_asymmetric_err(err)
+        if isinstance(err, tuple):
+            err = np.array([np.asarray(err[0]), np.asarray(err[1])])
+        # Call Axes.bar directly with orientation='horizontal' to bypass
+        # our bar() override (matplotlib's barh calls self.bar internally)
+        height = kwargs.pop('height', 0.8)
+        container = Axes.bar(self, x=None, height=height, width=width, bottom=y,
+                             align='center', orientation='horizontal',
+                             xerr=err, capsize=capsize,
+                             error_kw=err_kw, **kwargs)
+        if err is not None and err_label is not None:
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore", RuntimeWarning)
+                self.errorbar([np.nan], [np.nan], xerr=[0.5], fmt='none',
+                              color=err_kw['color'], capsize=capsize,
+                              linewidth=err_kw['linewidth'], label=err_label)
+        self._update_legend()
+        return container
+
     def scatter(self, x, y=None, xerr=None, yerr=None, err_label=None,
                 xerr_label=None, yerr_label=None, capsize=4, err_kw=None,
-                label=None, **kwargs):
+                label=None, group=None, legend=True, log_x=False, log_y=False, **kwargs):
         """Scatter plot with optional error bars in x and/or y.
 
         Parameters
         ----------
-        x : array-like (Nx2 or Nx3) or 1-d array-like
+        x : array-like (Nx2 or Nx3), DataFrame, or 1-d array-like
             If a 2-d array with 2 columns, columns are used as (x, y).
             If a 2-d array with 3 columns, columns are (x, y, size).
+            If a DataFrame with 2+ columns, first two are x and y;
+            column names become axis labels.
             Otherwise, 1-d x coordinates (y must be provided).
         y : array-like, optional
             The y coordinates. Required when x is 1-d.
@@ -451,31 +706,73 @@ class CleanAxes(Axes):
             Legend label for error bars when both directions share a label
             (or as a fallback when only one direction is present).
         xerr_label : str, optional
-            Legend label for horizontal error bars. Drawn as a horizontal
-            error bar marker in the legend.
+            Legend label for horizontal error bars.
         yerr_label : str, optional
-            Legend label for vertical error bars. Drawn as a vertical
-            error bar marker in the legend.
+            Legend label for vertical error bars.
         capsize : float, default 4
             Width of error bar caps in points.
         err_kw : dict, optional
             Additional keyword arguments for the error bars.
         label : str, optional
             Legend label for the scatter points.
+        group : array-like, optional
+            Categorical group labels. Each unique value gets a color from
+            the cycle and a legend entry. Mutually exclusive with 'c'.
         **kwargs
             Additional keyword arguments passed to matplotlib scatter()
             (e.g. color, s, marker).
         """
-        # Matrix mode: Nx2 or Nx3
+        if not legend:
+            self._cleanplots_no_legend = True
+        if log_x:
+            self.set_xscale('log')
+        if log_y:
+            self.set_yscale('log')
+        # Matrix / DataFrame mode: Nx2 or Nx3
         if y is None:
-            data = np.asarray(x)
+            if _is_dataframe(x):
+                col_names = list(x.columns)
+                data = x.values
+                if len(col_names) >= 1:
+                    self.set_xlabel(str(col_names[0]))
+                if len(col_names) >= 2:
+                    self.set_ylabel(str(col_names[1]))
+            else:
+                data = np.asarray(x)
             if data.ndim == 2 and data.shape[1] in (2, 3):
                 x = data[:, 0]
                 y = data[:, 1]
                 if data.shape[1] == 3:
                     kwargs.setdefault('s', data[:, 2])
             else:
-                raise ValueError("When y is not provided, x must be an Nx2 or Nx3 array")
+                raise ValueError("When y is not provided, x must be an Nx2 or Nx3 array or DataFrame")
+
+        # Group mode: categorical coloring
+        if group is not None:
+            if 'c' in kwargs:
+                raise ValueError("Cannot use both 'group' and 'c'")
+            group_arr = np.asarray(group)
+            unique_groups = list(dict.fromkeys(group_arr))
+            cycle = get_color_cycle()
+            x_arr = np.asarray(x)
+            y_arr = np.asarray(y)
+            n = len(x_arr)
+            all_sc = []
+            for i, g in enumerate(unique_groups):
+                mask = group_arr == g
+                color = cycle[i % len(cycle)]
+                masked_kwargs = {}
+                for k, v in kwargs.items():
+                    if hasattr(v, '__len__') and not isinstance(v, str) and len(v) == n:
+                        masked_kwargs[k] = np.asarray(v)[mask]
+                    else:
+                        masked_kwargs[k] = v
+                sc = super().scatter(x_arr[mask], y_arr[mask],
+                                     color=color, label=str(g), **masked_kwargs)
+                all_sc.append(sc)
+            self._update_legend()
+            return all_sc
+
         sc = super().scatter(x, y, label=label, **kwargs)
         if xerr is not None or yerr is not None:
             if err_kw is None:
@@ -484,8 +781,10 @@ class CleanAxes(Axes):
             err_kw.setdefault('color', 'black')
             err_kw.setdefault('linewidth', 1.5)
             err_kw.setdefault('capsize', capsize)
+            xerr = _split_asymmetric_err(xerr)
             if isinstance(xerr, tuple):
                 xerr = np.array([np.asarray(xerr[0]), np.asarray(xerr[1])])
+            yerr = _split_asymmetric_err(yerr)
             if isinstance(yerr, tuple):
                 yerr = np.array([np.asarray(yerr[0]), np.asarray(yerr[1])])
             self.errorbar(x, y, xerr=xerr, yerr=yerr, **err_kw)
@@ -510,6 +809,42 @@ class CleanAxes(Axes):
                                   linewidth=err_kw['linewidth'], label=xerr_label)
         self._update_legend()
         return sc
+
+    def add_colorbar(self, cmap, values=None, vmin=None, vmax=None):
+        """Add a colorbar to this axes for manually-applied colors.
+
+        Use when you've applied colors via a colormap manually (e.g.
+        edgecolors=cmap(values)) and want a colorbar showing the scale.
+
+        Parameters
+        ----------
+        cmap : Colormap
+            The colormap used to generate the colors.
+        values : array-like, optional
+            The data values that were mapped. Used to infer vmin/vmax.
+        vmin, vmax : float, optional
+            Explicit range for the colorbar. Override values-based inference.
+            Required if values is not provided.
+
+        Returns
+        -------
+        Colorbar
+        """
+        import matplotlib.cm as cm
+        import matplotlib.colors as mcolors
+
+        if values is not None:
+            values = np.asarray(values)
+            if vmin is None:
+                vmin = float(values.min())
+            if vmax is None:
+                vmax = float(values.max())
+        elif vmin is None or vmax is None:
+            raise ValueError("Must provide either 'values' or both 'vmin' and 'vmax'")
+
+        norm = mcolors.Normalize(vmin=vmin, vmax=vmax)
+        sm = cm.ScalarMappable(norm=norm, cmap=cmap)
+        return self.get_figure().colorbar(sm, ax=self)
 
     def legend(self, *args, **kwargs):
         """Override legend to include extra handles from line()/bar()/scatter() err_label."""
@@ -571,34 +906,43 @@ class CleanAxes(Axes):
             texts.append(t)
         return texts
 
-    def heatmap(self, data, annotate=True, fmt='.2f', cmap='viridis', cbar=True,
-                text_color_thresh=None, **kwargs):
+    def heatmap(self, data, annotate=True, fmt='.2f', annot_strings=None,
+                cmap='viridis', cbar=True, legend=True, **kwargs):
         """Plot a heatmap from a 2-d array or DataFrame.
 
         Parameters
         ----------
         data : 2-d array-like or DataFrame
             The data to display. If a DataFrame, index → y-axis labels,
-            columns → x-axis labels.
+            columns → x-axis labels. Index and column names become
+            axis labels automatically.
         annotate : bool, default True
             Whether to annotate each cell with its value.
         fmt : str, default '.2f'
             Format string for cell annotations (e.g. '.2f', 'd', '.1%').
+            Ignored if annot_strings is provided.
+        annot_strings : 2-d array-like or DataFrame, optional
+            Custom annotation strings for each cell. Must have the same
+            shape as data. If provided, these are used instead of
+            formatting the numeric values with fmt.
         cmap : str or Colormap, default 'viridis'
             Colormap for the heatmap.
         cbar : bool, default True
             Whether to add a colorbar.
-        text_color_thresh : float, optional
-            Threshold for switching annotation text from black to white.
-            Defaults to the midpoint of the data range.
         **kwargs
             Additional keyword arguments passed to imshow().
         """
+        if not legend:
+            self._cleanplots_no_legend = True
         row_labels = None
         col_labels = None
+        row_name = None
+        col_name = None
         if _is_dataframe(data):
             row_labels = [str(l) for l in data.index]
             col_labels = [str(l) for l in data.columns]
+            row_name = getattr(data.index, 'name', None)
+            col_name = getattr(data.columns, 'name', None)
             values = data.values.astype(float)
         else:
             values = np.asarray(data, dtype=float)
@@ -614,24 +958,41 @@ class CleanAxes(Axes):
             self.set_xticklabels(col_labels)
             self.xaxis.set_label_position('top')
             self.tick_params(top=True, bottom=False, labeltop=True, labelbottom=False)
+        if row_name:
+            self.set_ylabel(str(row_name))
+        if col_name:
+            self.set_xlabel(str(col_name))
+
+        if annot_strings is not None:
+            if _is_dataframe(annot_strings):
+                annot_strings = annot_strings.values
+            annot_strings = np.asarray(annot_strings)
+            annotate = True
 
         if annotate:
-            if text_color_thresh is None:
-                text_color_thresh = (values.min() + values.max()) / 2
+            # Use colormap luminance to pick text color for contrast
+            norm = im.norm
+            cmap_obj = im.cmap
             for i in range(values.shape[0]):
                 for j in range(values.shape[1]):
-                    color = 'white' if values[i, j] > text_color_thresh else 'black'
-                    val = int(values[i, j]) if fmt == 'd' else values[i, j]
-                    self.text(j, i, format(val, fmt),
+                    rgba = cmap_obj(norm(values[i, j]))
+                    # Perceived luminance (ITU-R BT.601)
+                    lum = 0.299 * rgba[0] + 0.587 * rgba[1] + 0.114 * rgba[2]
+                    color = 'white' if lum < 0.5 else 'black'
+                    if annot_strings is not None:
+                        txt = str(annot_strings[i, j])
+                    else:
+                        val = int(values[i, j]) if fmt == 'd' else values[i, j]
+                        txt = format(val, fmt)
+                    self.text(j, i, txt,
                               ha='center', va='center', color=color)
 
         if cbar:
-            self.get_figure().colorbar(im, ax=self)
-
-        return im
+            return self.get_figure().colorbar(im, ax=self)
+        return None
 
     def box(self, data, positions=None, widths=0.6, showfliers=True,
-            patch_artist=True, color=None, **kwargs):
+            patch_artist=True, color=None, legend=True, log_y=False, **kwargs):
         """Box plot from a DataFrame, dict, or list of arrays.
 
         Parameters
@@ -658,6 +1019,10 @@ class CleanAxes(Axes):
         **kwargs
             Additional keyword arguments passed to matplotlib boxplot().
         """
+        if not legend:
+            self._cleanplots_no_legend = True
+        if log_y:
+            self.set_yscale('log')
         cycle = get_color_cycle()
 
         # DataFrame pivot mode: cells contain arrays
@@ -705,24 +1070,24 @@ class CleanAxes(Axes):
     def _box_pivot(self, df, widths=0.6, showfliers=True, patch_artist=True, **kwargs):
         """Grouped box plot from a pivot DataFrame where cells contain arrays.
 
-        Rows (index) → colors, columns → x-axis groups.
+        Index → x-axis labels, columns → colored groups (matches bar chart convention).
         """
         cycle = get_color_cycle()
         n_rows = len(df.index)
         n_cols = len(df.columns)
-        box_width = widths / n_rows
+        box_width = widths / n_cols
 
         all_box_data = []
         all_positions = []
         all_colors = []
 
-        for j, col in enumerate(df.columns):
-            for i, row_key in enumerate(df.index):
+        for i, row_key in enumerate(df.index):
+            for j, col in enumerate(df.columns):
                 arr = np.asarray(df.loc[row_key, col])
                 all_box_data.append(arr)
-                offset = (i - (n_rows - 1) / 2) * box_width
-                all_positions.append(j + offset)
-                all_colors.append(cycle[i % len(cycle)])
+                offset = (j - (n_cols - 1) / 2) * box_width
+                all_positions.append(i + offset)
+                all_colors.append(cycle[j % len(cycle)])
 
         bp = self.boxplot(all_box_data, positions=all_positions, widths=box_width * 0.9,
                           showfliers=showfliers, patch_artist=patch_artist, **kwargs)
@@ -736,24 +1101,24 @@ class CleanAxes(Axes):
         for mean in bp.get('means', []):
             mean.set_color('black')
 
-        # Set x labels to column names
-        self.set_xticks(range(n_cols))
-        self.set_xticklabels([str(c) for c in df.columns])
+        # Set x labels to index names
+        self.set_xticks(range(n_rows))
+        self.set_xticklabels([str(k) for k in df.index])
 
         # Single column: ylabel instead of legend
         if n_cols == 1:
             self.set_ylabel(str(df.columns[0]))
 
-        # Legend for row colors
-        for i, row_key in enumerate(df.index):
-            color = cycle[i % len(cycle)]
-            self.plot([], [], color=color, linewidth=6, alpha=0.7, label=str(row_key))
+        # Legend for column colors
+        for j, col in enumerate(df.columns):
+            color = cycle[j % len(cycle)]
+            self.plot([], [], color=color, linewidth=6, alpha=0.7, label=str(col))
         self._update_legend()
 
         return bp
 
     def violin(self, data, positions=None, widths=0.7, showmedians=True,
-               showextrema=False, color=None, **kwargs):
+               showextrema=False, color=None, legend=True, log_y=False, **kwargs):
         """Violin plot from a DataFrame, dict, or list of arrays.
 
         Parameters
@@ -778,6 +1143,10 @@ class CleanAxes(Axes):
             Useful extras: bw_method=(float | 'scott' | 'silverman') controls
             the KDE bandwidth (default 'scott'); larger values → smoother.
         """
+        if not legend:
+            self._cleanplots_no_legend = True
+        if log_y:
+            self.set_yscale('log')
         # matplotlib's violinplot() internally calls self.violin(vpstats, ...)
         # where vpstats is a list of dicts. Detect that and delegate to parent.
         if isinstance(data, list) and len(data) > 0 and isinstance(data[0], dict):
@@ -825,23 +1194,26 @@ class CleanAxes(Axes):
         return vp
 
     def _violin_pivot(self, df, widths=0.7, showmedians=True, showextrema=False, **kwargs):
-        """Grouped violin plot from a pivot DataFrame where cells contain arrays."""
+        """Grouped violin plot from a pivot DataFrame where cells contain arrays.
+
+        Index → x-axis labels, columns → colored groups (matches bar chart convention).
+        """
         cycle = get_color_cycle()
         n_rows = len(df.index)
         n_cols = len(df.columns)
-        violin_width = widths / n_rows
+        violin_width = widths / n_cols
 
         all_data = []
         all_positions = []
         all_colors = []
 
-        for j, col in enumerate(df.columns):
-            for i, row_key in enumerate(df.index):
+        for i, row_key in enumerate(df.index):
+            for j, col in enumerate(df.columns):
                 arr = np.asarray(df.loc[row_key, col])
                 all_data.append(arr)
-                offset = (i - (n_rows - 1) / 2) * violin_width
-                all_positions.append(j + offset)
-                all_colors.append(cycle[i % len(cycle)])
+                offset = (j - (n_cols - 1) / 2) * violin_width
+                all_positions.append(i + offset)
+                all_colors.append(cycle[j % len(cycle)])
 
         vp = self.violinplot(all_data, positions=all_positions, widths=violin_width * 0.9,
                              showmedians=showmedians, showextrema=showextrema, **kwargs)
@@ -853,24 +1225,24 @@ class CleanAxes(Axes):
             if key in vp:
                 vp[key].set_color('black')
 
-        # Set x labels to column names
-        self.set_xticks(range(n_cols))
-        self.set_xticklabels([str(c) for c in df.columns])
+        # Set x labels to index names
+        self.set_xticks(range(n_rows))
+        self.set_xticklabels([str(k) for k in df.index])
 
         # Single column: ylabel instead of legend
         if n_cols == 1:
             self.set_ylabel(str(df.columns[0]))
 
-        # Legend for row colors
-        for i, row_key in enumerate(df.index):
-            color = cycle[i % len(cycle)]
-            self.plot([], [], color=color, linewidth=6, alpha=0.7, label=str(row_key))
+        # Legend for column colors
+        for j, col in enumerate(df.columns):
+            color = cycle[j % len(cycle)]
+            self.plot([], [], color=color, linewidth=6, alpha=0.7, label=str(col))
         self._update_legend()
 
         return vp
 
     def strip(self, data, positions=None, jitter=0.1, color=None,
-              s=25, alpha=0.7, **kwargs):
+              s=25, alpha=0.7, legend=True, log_y=False, **kwargs):
         """Strip (jitter) plot: individual data points at jittered x positions.
 
         An alternative to box/violin that shows every raw data point. Good
@@ -880,8 +1252,13 @@ class CleanAxes(Axes):
         Parameters
         ----------
         data : DataFrame, dict, or list of array-like
-            Same formats as box() and violin() (scalar DataFrame, dict, or
-            list of arrays). Pivot mode is not supported.
+            If DataFrame with array cells (pivot mode): rows → colors,
+            columns → x-axis groups (side-by-side strips, analogous to
+            grouped bar charts). Index names label the colors, column
+            names label the x positions.
+            If DataFrame with scalar columns: each column is a strip.
+            If dict: keys are labels, values are arrays.
+            If list: each element is an array for one strip.
         positions : array-like, optional
             Custom x positions for the groups. Defaults to 0, 1, 2, ...
         jitter : float, default 0.1
@@ -895,7 +1272,17 @@ class CleanAxes(Axes):
         **kwargs
             Additional keyword arguments passed to matplotlib scatter().
         """
+        if not legend:
+            self._cleanplots_no_legend = True
+        if log_y:
+            self.set_yscale('log')
         cycle = get_color_cycle()
+
+        # DataFrame pivot mode: cells contain arrays
+        if _is_dataframe(data):
+            first_val = data.iloc[0, 0]
+            if isinstance(first_val, (list, np.ndarray)):
+                return self._strip_pivot(data, jitter=jitter, s=s, alpha=alpha, **kwargs)
 
         if _is_dataframe(data):
             groups = [np.asarray(data[col].dropna().values) for col in data.columns]
@@ -929,8 +1316,41 @@ class CleanAxes(Axes):
             self.set_xticks(list(positions))
             self.set_xticklabels(labels)
 
-    def hist(self, data, bins=30, log_x=False, alpha=0.5, color=None,
-             label=None, **kwargs):
+    def _strip_pivot(self, df, jitter=0.1, s=25, alpha=0.7, **kwargs):
+        """Grouped strip plot from a pivot DataFrame where cells contain arrays.
+
+        Index → x-axis labels, columns → colored groups (matches bar chart convention).
+        """
+        cycle = get_color_cycle()
+        n_rows = len(df.index)
+        n_cols = len(df.columns)
+        strip_width = 0.6 / n_cols
+
+        rng = np.random.default_rng(0)
+        for i, row_key in enumerate(df.index):
+            for j, col in enumerate(df.columns):
+                arr = np.asarray(df.loc[row_key, col])
+                offset = (j - (n_cols - 1) / 2) * strip_width
+                x = i + offset + rng.uniform(-jitter * strip_width, jitter * strip_width, size=len(arr))
+                color = cycle[j % len(cycle)]
+                Axes.scatter(self, x, arr, s=s, alpha=alpha, color=color, **kwargs)
+
+        # Set x labels to index names
+        self.set_xticks(range(n_rows))
+        self.set_xticklabels([str(k) for k in df.index])
+
+        # Single column: ylabel instead of legend
+        if n_cols == 1:
+            self.set_ylabel(str(df.columns[0]))
+
+        # Legend for column colors
+        for j, col in enumerate(df.columns):
+            color = cycle[j % len(cycle)]
+            Axes.scatter(self, [], [], s=s, alpha=alpha, color=color, label=str(col))
+        self._update_legend()
+
+    def hist(self, data, bins=30, log_x=False, log_y=False, alpha=0.5, color=None,
+             label=None, legend=True, **kwargs):
         """Overlaid histograms with shared bins.
 
         Pools all groups to compute a single bin edge array, then plots each
@@ -967,6 +1387,8 @@ class CleanAxes(Axes):
         -------
         list of (counts, edges, patches) tuples, one per group.
         """
+        if not legend:
+            self._cleanplots_no_legend = True
         cycle = get_color_cycle()
 
         # Normalize input to (groups, auto_labels)
@@ -1033,6 +1455,8 @@ class CleanAxes(Axes):
 
         if log_x:
             self.set_xscale('log')
+        if log_y:
+            self.set_yscale('log')
         return result
 
 mprojections.register_projection(CleanAxes)
@@ -1274,11 +1698,16 @@ def clean(ax, spines='bottom_left', ticks='sparse', zero_origin=False, decimals=
         _zero_lims(ax)
     elif zero_origin in ('x', 'y'):
         _zero_lims(ax, mode=zero_origin)
-    if color_labels == 'auto':
-        _apply_auto_color_labels(ax)
-    legend = ax.get_legend()
-    if legend is not None:
-        legend.set_frame_on(False)
+    if getattr(ax, '_cleanplots_no_legend', False):
+        legend = ax.get_legend()
+        if legend is not None:
+            legend.remove()
+    else:
+        if color_labels == 'auto':
+            _apply_auto_color_labels(ax)
+        legend = ax.get_legend()
+        if legend is not None:
+            legend.set_frame_on(False)
     if kwargs:
         ax.set(**kwargs)
 
