@@ -100,6 +100,26 @@ ax.clean(xlabel='Epoch')
 f.savefig(FIGDIR / 'pivot_line.png', dpi=150, bbox_inches='tight')
 plt.close(f)
 
+# --- 1e2. Wide MultiIndex line from tidy data via cp.data ---
+tidy_rows = []
+for model in ['MLP', 'Transformer']:
+    for seed in range(5):
+        for epoch in range(num_epochs):
+            tidy_rows.append({
+                'model': model, 'seed': seed, 'epoch': epoch,
+                'train_loss': train_histories[model][seed, epoch],
+                'val_loss': val_histories[model][seed, epoch],
+            })
+tidy_df = pd.DataFrame(tidy_rows)
+wide_mean = cp.data.collapse(tidy_df, 'epoch', ['train_loss', 'val_loss'], over='seed', func='mean')
+wide_std = cp.data.collapse(tidy_df, 'epoch', ['train_loss', 'val_loss'], over='seed', func='std')
+
+f, ax = cp.fig()
+ax.line(wide_mean, err=wide_std, err_label='±1 SD')
+ax.clean(ylabel='Loss')
+f.savefig(FIGDIR / 'wide_multi_line.png', dpi=150, bbox_inches='tight')
+plt.close(f)
+
 # --- 1f. Pivot single column (ylabel inferred) ---
 means_single = pd.DataFrame({
     'val_loss': [val_histories[m].mean(axis=0) for m in models],
@@ -347,6 +367,13 @@ f, ax = cp.fig()
 ax.strip(box_data)
 ax.clean(ylabel='Accuracy')
 f.savefig(FIGDIR / 'strip_plot.png', dpi=150, bbox_inches='tight')
+plt.close(f)
+
+# --- 5e2. Grouped strip plot (pivot DataFrame) ---
+f, ax = cp.fig()
+ax.strip(box_pivot)
+ax.clean(ylabel='Score')
+f.savefig(FIGDIR / 'grouped_strip.png', dpi=150, bbox_inches='tight')
 plt.close(f)
 
 # --- 5f. Overlaid histograms (shared bins) ---

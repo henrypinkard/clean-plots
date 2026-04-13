@@ -257,212 +257,229 @@ class="sourceCode python"><code class="sourceCode python"><span id="cb2-1"><a hr
 <span id="cb2-3"><a href="#cb2-3" aria-hidden="true" tabindex="-1"></a>f, (ax1, ax2) <span class="op">=</span> cp.fig(cols<span class="op">=</span><span class="dv">2</span>)            <span class="co"># side-by-side</span></span>
 <span id="cb2-4"><a href="#cb2-4" aria-hidden="true" tabindex="-1"></a>ax.clean(xlabel<span class="op">=</span><span class="st">&#39;X&#39;</span>, ylabel<span class="op">=</span><span class="st">&#39;Y&#39;</span>)          <span class="co"># standard cleanup</span></span>
 <span id="cb2-5"><a href="#cb2-5" aria-hidden="true" tabindex="-1"></a>ax.clean(ticks<span class="op">=</span><span class="va">None</span>, spines<span class="op">=</span><span class="va">None</span>)         <span class="co"># no axes (for images)</span></span></code></pre></div>
-<p><strong>Input forms.</strong> <code>line</code>, <code>bar</code>,
-<code>barh</code>, and <code>scatter</code> all accept the same input
-shapes:</p>
-<div class="sourceCode" id="cb3"><pre
-class="sourceCode python"><code class="sourceCode python"><span id="cb3-1"><a href="#cb3-1" aria-hidden="true" tabindex="-1"></a>ax.line(y_values)                                <span class="co"># x inferred as range</span></span>
-<span id="cb3-2"><a href="#cb3-2" aria-hidden="true" tabindex="-1"></a>ax.line(x_values, y_values)                      <span class="co"># standard</span></span>
-<span id="cb3-3"><a href="#cb3-3" aria-hidden="true" tabindex="-1"></a>ax.line([y1, y2, y3], label<span class="op">=</span>[<span class="st">&#39;A&#39;</span>, <span class="st">&#39;B&#39;</span>, <span class="st">&#39;C&#39;</span>])     <span class="co"># list of arrays → multiple series</span></span></code></pre></div>
 <p><strong>Error representation.</strong> <code>err=</code> adds error
 visualization (shaded band for lines, error bars for bar/scatter).
-<code>err_label=</code> creates a single shared legend entry for the
-error.</p>
+Accepts symmetric error, a <code>(lower, upper)</code> tuple, or an Nx2
+array. <code>err_label=</code> creates a single shared legend entry.</p>
 <p><strong>Legend.</strong> <code>clean()</code> builds the legend
 automatically. Pass <code>legend=False</code> to any plot call to
 suppress it entirely. To reposition:</p>
-<div class="sourceCode" id="cb4"><pre
-class="sourceCode python"><code class="sourceCode python"><span id="cb4-1"><a href="#cb4-1" aria-hidden="true" tabindex="-1"></a>ax.line(x, y, label<span class="op">=</span><span class="st">&#39;A&#39;</span>, legend<span class="op">=</span><span class="va">False</span>)    <span class="co"># no legend on this axes</span></span>
-<span id="cb4-2"><a href="#cb4-2" aria-hidden="true" tabindex="-1"></a>ax.get_legend().set_loc(<span class="st">&#39;upper left&#39;</span>)     <span class="co"># or reposition after clean()</span></span></code></pre></div>
+<div class="sourceCode" id="cb3"><pre
+class="sourceCode python"><code class="sourceCode python"><span id="cb3-1"><a href="#cb3-1" aria-hidden="true" tabindex="-1"></a>ax.get_legend().set_loc(<span class="st">&#39;upper left&#39;</span>)     <span class="co"># reposition after clean()</span></span></code></pre></div>
 <p><strong>Color labels.</strong> <code>clean()</code> automatically
 replaces multi-color legend entries with colored text. To place a
 color-label block manually:</p>
-<div class="sourceCode" id="cb5"><pre
-class="sourceCode python"><code class="sourceCode python"><span id="cb5-1"><a href="#cb5-1" aria-hidden="true" tabindex="-1"></a>ax.color_labels([<span class="st">&#39;MLP&#39;</span>, <span class="st">&#39;RF&#39;</span>, <span class="st">&#39;Transformer&#39;</span>], x<span class="op">=</span><span class="fl">0.05</span>, ha<span class="op">=</span><span class="st">&#39;left&#39;</span>)</span></code></pre></div>
+<div class="sourceCode" id="cb4"><pre
+class="sourceCode python"><code class="sourceCode python"><span id="cb4-1"><a href="#cb4-1" aria-hidden="true" tabindex="-1"></a>ax.color_labels([<span class="st">&#39;MLP&#39;</span>, <span class="st">&#39;RF&#39;</span>, <span class="st">&#39;Transformer&#39;</span>], x<span class="op">=</span><span class="fl">0.05</span>, ha<span class="op">=</span><span class="st">&#39;left&#39;</span>)</span></code></pre></div>
 <p><img src="figures/color_labels.png" width="30%"></p>
 <hr />
 <h2 id="line-plots">Line plots</h2>
+<h3 id="training-curves-with-error-bands">Training curves with error
+bands</h3>
+<p>Starting from tidy per-epoch data:</p>
+<pre><code>     model    lr  seed  epoch  train_loss  val_loss
+0    resnet  0.01     0      0        0.82      0.91
+1    resnet  0.01     0      1        0.54      0.63
+...</code></pre>
+<p>Aggregate over seeds with <code>cp.data.collapse</code>:</p>
 <div class="sourceCode" id="cb6"><pre
-class="sourceCode python"><code class="sourceCode python"><span id="cb6-1"><a href="#cb6-1" aria-hidden="true" tabindex="-1"></a>f, ax <span class="op">=</span> cp.fig()</span>
-<span id="cb6-2"><a href="#cb6-2" aria-hidden="true" tabindex="-1"></a>ax.line(x, y1, err<span class="op">=</span>std1, label<span class="op">=</span><span class="st">&#39;Model A&#39;</span>, err_label<span class="op">=</span><span class="st">&#39;±1 SD&#39;</span>)</span>
-<span id="cb6-3"><a href="#cb6-3" aria-hidden="true" tabindex="-1"></a>ax.line(x, y2, err<span class="op">=</span>std2, label<span class="op">=</span><span class="st">&#39;Model B&#39;</span>)</span>
-<span id="cb6-4"><a href="#cb6-4" aria-hidden="true" tabindex="-1"></a>ax.clean(xlabel<span class="op">=</span><span class="st">&#39;Step&#39;</span>, ylabel<span class="op">=</span><span class="st">&#39;Score&#39;</span>)</span></code></pre></div>
-<p><img src="figures/error_band.png" width="30%"></p>
-<h3 id="many-runs-in-one-color">Many runs in one color</h3>
-<p>A single <code>color=</code> and <code>alpha=</code> on a list of
-arrays overlays them in the same color. A single <code>label=</code>
-string produces one shared legend entry.</p>
-<div class="sourceCode" id="cb7"><pre
-class="sourceCode python"><code class="sourceCode python"><span id="cb7-1"><a href="#cb7-1" aria-hidden="true" tabindex="-1"></a>f, ax <span class="op">=</span> cp.fig()</span>
-<span id="cb7-2"><a href="#cb7-2" aria-hidden="true" tabindex="-1"></a>ax.line(runs, color<span class="op">=</span>cp.colors[<span class="dv">0</span>], alpha<span class="op">=</span><span class="fl">0.3</span>, label<span class="op">=</span><span class="st">&#39;Runs&#39;</span>)</span>
-<span id="cb7-3"><a href="#cb7-3" aria-hidden="true" tabindex="-1"></a>ax.line(np.mean(runs, axis<span class="op">=</span><span class="dv">0</span>), color<span class="op">=</span>cp.colors[<span class="dv">0</span>], lw<span class="op">=</span><span class="dv">2</span>, label<span class="op">=</span><span class="st">&#39;Mean&#39;</span>)</span>
-<span id="cb7-4"><a href="#cb7-4" aria-hidden="true" tabindex="-1"></a>ax.clean(xlabel<span class="op">=</span><span class="st">&#39;Step&#39;</span>, ylabel<span class="op">=</span><span class="st">&#39;Reward&#39;</span>)</span></code></pre></div>
-<p><img src="figures/multi_run.png" width="30%"></p>
-<h3 id="pivot-dataframe">Pivot DataFrame</h3>
-<p>Rows map to colors, columns to line styles. <code>err=</code> adds
-shaded bands.</p>
-<p>A typical starting point is a flat run log:</p>
-<pre><code>&gt;&gt;&gt; runs
-     model  seed       train_loss              val_loss
-0    MLP       0  [2.48, 2.33, ...]     [2.59, 2.42, ...]
-1    MLP       1  [2.51, 2.30, ...]     [2.62, 2.40, ...]
-2    MLP       2  [2.46, 2.34, ...]     [2.58, 2.43, ...]
-3    Tx        0  [1.98, 1.87, ...]     [2.09, 1.96, ...]
-4    Tx        1  ...                   ...</code></pre>
-<p>Aggregate across seeds:</p>
-<div class="sourceCode" id="cb9"><pre
-class="sourceCode python"><code class="sourceCode python"><span id="cb9-1"><a href="#cb9-1" aria-hidden="true" tabindex="-1"></a>pivot     <span class="op">=</span> (runs.drop(columns<span class="op">=</span><span class="st">&#39;seed&#39;</span>).groupby(<span class="st">&#39;model&#39;</span>)</span>
-<span id="cb9-2"><a href="#cb9-2" aria-hidden="true" tabindex="-1"></a>                 .agg(<span class="kw">lambda</span> s: np.mean(np.stack(s.values), axis<span class="op">=</span><span class="dv">0</span>)))</span>
-<span id="cb9-3"><a href="#cb9-3" aria-hidden="true" tabindex="-1"></a>pivot_std <span class="op">=</span> (runs.drop(columns<span class="op">=</span><span class="st">&#39;seed&#39;</span>).groupby(<span class="st">&#39;model&#39;</span>)</span>
-<span id="cb9-4"><a href="#cb9-4" aria-hidden="true" tabindex="-1"></a>                 .agg(<span class="kw">lambda</span> s: np.std (np.stack(s.values), axis<span class="op">=</span><span class="dv">0</span>)))</span></code></pre></div>
-<div class="sourceCode" id="cb10"><pre
-class="sourceCode python"><code class="sourceCode python"><span id="cb10-1"><a href="#cb10-1" aria-hidden="true" tabindex="-1"></a>f, ax <span class="op">=</span> cp.fig()</span>
-<span id="cb10-2"><a href="#cb10-2" aria-hidden="true" tabindex="-1"></a>ax.line(pivot, err<span class="op">=</span>pivot_std, err_label<span class="op">=</span><span class="st">&#39;±1 SD&#39;</span>)</span>
-<span id="cb10-3"><a href="#cb10-3" aria-hidden="true" tabindex="-1"></a>ax.clean(xlabel<span class="op">=</span><span class="st">&#39;Epoch&#39;</span>)</span></code></pre></div>
-<p><img src="figures/pivot_line.png" width="30%"></p>
-<h3 id="wide-dataframe-with-multiindex-columns">Wide DataFrame with
-MultiIndex columns</h3>
-<p>DataFrames from <code>cp.data.collapse()</code> have MultiIndex
-columns. The top column level maps to line styles, remaining levels map
-to colors.</p>
-<div class="sourceCode" id="cb11"><pre
-class="sourceCode python"><code class="sourceCode python"><span id="cb11-1"><a href="#cb11-1" aria-hidden="true" tabindex="-1"></a>mean <span class="op">=</span> cp.data.collapse(df, index<span class="op">=</span><span class="st">&#39;epoch&#39;</span>, values<span class="op">=</span>[<span class="st">&#39;train_loss&#39;</span>, <span class="st">&#39;val_loss&#39;</span>],</span>
-<span id="cb11-2"><a href="#cb11-2" aria-hidden="true" tabindex="-1"></a>                         over<span class="op">=</span><span class="st">&#39;seed&#39;</span>, func<span class="op">=</span><span class="st">&#39;mean&#39;</span>)</span>
-<span id="cb11-3"><a href="#cb11-3" aria-hidden="true" tabindex="-1"></a>std  <span class="op">=</span> cp.data.collapse(df, index<span class="op">=</span><span class="st">&#39;epoch&#39;</span>, values<span class="op">=</span>[<span class="st">&#39;train_loss&#39;</span>, <span class="st">&#39;val_loss&#39;</span>],</span>
-<span id="cb11-4"><a href="#cb11-4" aria-hidden="true" tabindex="-1"></a>                         over<span class="op">=</span><span class="st">&#39;seed&#39;</span>, func<span class="op">=</span><span class="st">&#39;std&#39;</span>)</span>
-<span id="cb11-5"><a href="#cb11-5" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb11-6"><a href="#cb11-6" aria-hidden="true" tabindex="-1"></a>f, ax <span class="op">=</span> cp.fig()</span>
-<span id="cb11-7"><a href="#cb11-7" aria-hidden="true" tabindex="-1"></a>ax.line(mean, err<span class="op">=</span>std, err_label<span class="op">=</span><span class="st">&#39;±1 SD&#39;</span>)</span>
-<span id="cb11-8"><a href="#cb11-8" aria-hidden="true" tabindex="-1"></a>ax.clean(ylabel<span class="op">=</span><span class="st">&#39;Loss&#39;</span>)</span></code></pre></div>
+class="sourceCode python"><code class="sourceCode python"><span id="cb6-1"><a href="#cb6-1" aria-hidden="true" tabindex="-1"></a>mean <span class="op">=</span> cp.data.collapse(df, <span class="st">&#39;epoch&#39;</span>, [<span class="st">&#39;train_loss&#39;</span>, <span class="st">&#39;val_loss&#39;</span>], over<span class="op">=</span><span class="st">&#39;seed&#39;</span>, func<span class="op">=</span><span class="st">&#39;mean&#39;</span>)</span>
+<span id="cb6-2"><a href="#cb6-2" aria-hidden="true" tabindex="-1"></a>std  <span class="op">=</span> cp.data.collapse(df, <span class="st">&#39;epoch&#39;</span>, [<span class="st">&#39;train_loss&#39;</span>, <span class="st">&#39;val_loss&#39;</span>], over<span class="op">=</span><span class="st">&#39;seed&#39;</span>, func<span class="op">=</span><span class="st">&#39;std&#39;</span>)</span></code></pre></div>
+<p>The resulting DataFrame has MultiIndex columns. The top level
+(<code>metric</code>) maps to line styles, remaining levels
+(<code>model</code>, <code>lr</code>) map to colors:</p>
+<pre><code>metric     train_loss                    val_loss
+model      resnet       mlp              resnet       mlp
+lr         0.01  0.001  0.01  0.001      0.01  0.001  0.01  0.001
+epoch
+0          0.82  0.91   1.01  1.12       0.91  1.02   1.12  1.24
+1          0.54  0.63   0.72  0.81       0.63  0.73   0.82  0.92
+...</code></pre>
+<p>Use <code>cp.data.slice</code> to filter, then plot:</p>
+<div class="sourceCode" id="cb8"><pre
+class="sourceCode python"><code class="sourceCode python"><span id="cb8-1"><a href="#cb8-1" aria-hidden="true" tabindex="-1"></a>f, (ax1, ax2) <span class="op">=</span> cp.fig(cols<span class="op">=</span><span class="dv">2</span>, sharey<span class="op">=</span><span class="va">True</span>)</span>
+<span id="cb8-2"><a href="#cb8-2" aria-hidden="true" tabindex="-1"></a>ax1.line(cp.data.<span class="bu">slice</span>(mean, lr<span class="op">=</span><span class="fl">0.001</span>), err<span class="op">=</span>cp.data.<span class="bu">slice</span>(std, lr<span class="op">=</span><span class="fl">0.001</span>), err_label<span class="op">=</span><span class="st">&#39;±1 SD&#39;</span>)</span>
+<span id="cb8-3"><a href="#cb8-3" aria-hidden="true" tabindex="-1"></a>ax1.clean(ylabel<span class="op">=</span><span class="st">&#39;Loss&#39;</span>, title<span class="op">=</span><span class="st">&#39;lr 0.001&#39;</span>)</span>
+<span id="cb8-4"><a href="#cb8-4" aria-hidden="true" tabindex="-1"></a>ax2.line(cp.data.<span class="bu">slice</span>(mean, lr<span class="op">=</span><span class="fl">0.01</span>), err<span class="op">=</span>cp.data.<span class="bu">slice</span>(std, lr<span class="op">=</span><span class="fl">0.01</span>), legend<span class="op">=</span><span class="va">False</span>)</span>
+<span id="cb8-5"><a href="#cb8-5" aria-hidden="true" tabindex="-1"></a>ax2.clean(title<span class="op">=</span><span class="st">&#39;lr 0.01&#39;</span>)</span></code></pre></div>
 <p><img src="figures/wide_multi_line.png" width="30%"></p>
+<h3 id="plotting-individual-runs">Plotting individual runs</h3>
+<p>Pass a single <code>color=</code> and <code>label=</code> to overlay
+multiple same-colored lines. When <code>color=</code> and
+<code>label=</code> are both set on a DataFrame, you get one color
+legend entry plus shared linestyle entries:</p>
+<div class="sourceCode" id="cb9"><pre
+class="sourceCode python"><code class="sourceCode python"><span id="cb9-1"><a href="#cb9-1" aria-hidden="true" tabindex="-1"></a>wide <span class="op">=</span> cp.data.to_wide(df, <span class="st">&#39;epoch&#39;</span>, [<span class="st">&#39;train_loss&#39;</span>, <span class="st">&#39;val_loss&#39;</span>])</span>
+<span id="cb9-2"><a href="#cb9-2" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb9-3"><a href="#cb9-3" aria-hidden="true" tabindex="-1"></a><span class="cf">for</span> i, model <span class="kw">in</span> <span class="bu">enumerate</span>([<span class="st">&#39;small&#39;</span>, <span class="st">&#39;medium&#39;</span>, <span class="st">&#39;large&#39;</span>]):</span>
+<span id="cb9-4"><a href="#cb9-4" aria-hidden="true" tabindex="-1"></a>    ax.line(cp.data.<span class="bu">slice</span>(wide, model<span class="op">=</span>model), color<span class="op">=</span>cp.colors[i], label<span class="op">=</span>model, alpha<span class="op">=</span><span class="fl">0.5</span>)</span>
+<span id="cb9-5"><a href="#cb9-5" aria-hidden="true" tabindex="-1"></a>ax.clean()</span></code></pre></div>
+<p>For raw arrays (e.g. RL reward curves), a list of arrays works
+directly:</p>
+<div class="sourceCode" id="cb10"><pre
+class="sourceCode python"><code class="sourceCode python"><span id="cb10-1"><a href="#cb10-1" aria-hidden="true" tabindex="-1"></a>ax.line(runs, color<span class="op">=</span>cp.colors[<span class="dv">0</span>], alpha<span class="op">=</span><span class="fl">0.3</span>, label<span class="op">=</span><span class="st">&#39;Runs&#39;</span>)</span>
+<span id="cb10-2"><a href="#cb10-2" aria-hidden="true" tabindex="-1"></a>ax.line(np.mean(runs, axis<span class="op">=</span><span class="dv">0</span>), color<span class="op">=</span>cp.colors[<span class="dv">0</span>], lw<span class="op">=</span><span class="dv">2</span>, label<span class="op">=</span><span class="st">&#39;Mean&#39;</span>)</span>
+<span id="cb10-3"><a href="#cb10-3" aria-hidden="true" tabindex="-1"></a>ax.clean(xlabel<span class="op">=</span><span class="st">&#39;Step&#39;</span>, ylabel<span class="op">=</span><span class="st">&#39;Reward&#39;</span>)</span></code></pre></div>
+<p><img src="figures/multi_run.png" width="30%"></p>
 <hr />
 <h2 id="bar-charts">Bar charts</h2>
+<h3 id="grouped-bar-chart-with-error-bars">Grouped bar chart with error
+bars</h3>
+<p>Starting from tidy per-seed metrics:</p>
+<pre><code>     model           seed  precision  recall    f1
+0    random_forest   0     0.92       0.88      0.90
+1    random_forest   1     0.90       0.86      0.88
+...</code></pre>
+<p>Collapse over seeds:</p>
 <div class="sourceCode" id="cb12"><pre
-class="sourceCode python"><code class="sourceCode python"><span id="cb12-1"><a href="#cb12-1" aria-hidden="true" tabindex="-1"></a>f, ax <span class="op">=</span> cp.fig()</span>
-<span id="cb12-2"><a href="#cb12-2" aria-hidden="true" tabindex="-1"></a>ax.bar(model_names, accuracies, err<span class="op">=</span>stds, err_label<span class="op">=</span><span class="st">&#39;±1 SD&#39;</span>)</span>
-<span id="cb12-3"><a href="#cb12-3" aria-hidden="true" tabindex="-1"></a>ax.clean(ylabel<span class="op">=</span><span class="st">&#39;Accuracy&#39;</span>)</span></code></pre></div>
-<p><img src="figures/bar_chart.png" width="30%"></p>
-<p><code>barh</code> mirrors <code>bar</code> with horizontal
-orientation (same input forms, <code>err=</code>, DataFrame grouping,
-<code>log_x=</code>):</p>
-<div class="sourceCode" id="cb13"><pre
-class="sourceCode python"><code class="sourceCode python"><span id="cb13-1"><a href="#cb13-1" aria-hidden="true" tabindex="-1"></a>f, ax <span class="op">=</span> cp.fig()</span>
-<span id="cb13-2"><a href="#cb13-2" aria-hidden="true" tabindex="-1"></a>ax.barh(model_names, accuracies, err<span class="op">=</span>stds, err_label<span class="op">=</span><span class="st">&#39;±1 SD&#39;</span>)</span>
-<span id="cb13-3"><a href="#cb13-3" aria-hidden="true" tabindex="-1"></a>ax.clean(xlabel<span class="op">=</span><span class="st">&#39;Accuracy&#39;</span>)</span></code></pre></div>
-<p>A DataFrame produces grouped bars (columns → groups, rows →
-categories):</p>
+class="sourceCode python"><code class="sourceCode python"><span id="cb12-1"><a href="#cb12-1" aria-hidden="true" tabindex="-1"></a>mean <span class="op">=</span> cp.data.collapse(df, <span class="st">&#39;model&#39;</span>, [<span class="st">&#39;precision&#39;</span>, <span class="st">&#39;recall&#39;</span>, <span class="st">&#39;f1&#39;</span>], over<span class="op">=</span><span class="st">&#39;seed&#39;</span>, func<span class="op">=</span><span class="st">&#39;mean&#39;</span>)</span>
+<span id="cb12-2"><a href="#cb12-2" aria-hidden="true" tabindex="-1"></a>std  <span class="op">=</span> cp.data.collapse(df, <span class="st">&#39;model&#39;</span>, [<span class="st">&#39;precision&#39;</span>, <span class="st">&#39;recall&#39;</span>, <span class="st">&#39;f1&#39;</span>], over<span class="op">=</span><span class="st">&#39;seed&#39;</span>, func<span class="op">=</span><span class="st">&#39;std&#39;</span>)</span></code></pre></div>
+<p>Result — index becomes x-axis categories, columns become colored
+groups:</p>
+<pre><code>metric          precision  recall    f1
+model
+gradient_boost  0.88       0.92      0.90
+logistic        0.82       0.85      0.83
+mlp             0.94       0.90      0.92
+random_forest   0.91       0.87      0.89</code></pre>
 <div class="sourceCode" id="cb14"><pre
 class="sourceCode python"><code class="sourceCode python"><span id="cb14-1"><a href="#cb14-1" aria-hidden="true" tabindex="-1"></a>f, ax <span class="op">=</span> cp.fig()</span>
-<span id="cb14-2"><a href="#cb14-2" aria-hidden="true" tabindex="-1"></a>ax.bar(df, err<span class="op">=</span>err_df, err_label<span class="op">=</span><span class="st">&#39;±1 SD&#39;</span>)</span>
-<span id="cb14-3"><a href="#cb14-3" aria-hidden="true" tabindex="-1"></a>ax.clean(ylabel<span class="op">=</span><span class="st">&#39;Score&#39;</span>)</span>
-<span id="cb14-4"><a href="#cb14-4" aria-hidden="true" tabindex="-1"></a>ax.get_legend().set_loc(<span class="st">&#39;upper left&#39;</span>)</span></code></pre></div>
+<span id="cb14-2"><a href="#cb14-2" aria-hidden="true" tabindex="-1"></a>ax.bar(mean, err<span class="op">=</span>std, err_label<span class="op">=</span><span class="st">&#39;±1 SD&#39;</span>)</span>
+<span id="cb14-3"><a href="#cb14-3" aria-hidden="true" tabindex="-1"></a>ax.clean(ylabel<span class="op">=</span><span class="st">&#39;Score&#39;</span>)</span></code></pre></div>
 <p><img src="figures/grouped_bar.png" width="30%"></p>
+<h3 id="horizontal-bar-chart">Horizontal bar chart</h3>
+<p>For single-metric results, <code>collapse</code> returns a Series.
+Pass it directly to <code>barh</code>:</p>
+<div class="sourceCode" id="cb15"><pre
+class="sourceCode python"><code class="sourceCode python"><span id="cb15-1"><a href="#cb15-1" aria-hidden="true" tabindex="-1"></a>mean <span class="op">=</span> cp.data.collapse(df, <span class="st">&#39;feature&#39;</span>, <span class="st">&#39;importance&#39;</span>, over<span class="op">=</span><span class="st">&#39;seed&#39;</span>, func<span class="op">=</span><span class="st">&#39;mean&#39;</span>)</span>
+<span id="cb15-2"><a href="#cb15-2" aria-hidden="true" tabindex="-1"></a>std  <span class="op">=</span> cp.data.collapse(df, <span class="st">&#39;feature&#39;</span>, <span class="st">&#39;importance&#39;</span>, over<span class="op">=</span><span class="st">&#39;seed&#39;</span>, func<span class="op">=</span><span class="st">&#39;std&#39;</span>)</span>
+<span id="cb15-3"><a href="#cb15-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb15-4"><a href="#cb15-4" aria-hidden="true" tabindex="-1"></a>f, ax <span class="op">=</span> cp.fig()</span>
+<span id="cb15-5"><a href="#cb15-5" aria-hidden="true" tabindex="-1"></a>ax.barh(mean, err<span class="op">=</span>std)</span>
+<span id="cb15-6"><a href="#cb15-6" aria-hidden="true" tabindex="-1"></a>ax.clean()</span></code></pre></div>
+<p><img src="figures/bar_chart.png" width="30%"></p>
 <hr />
 <h2 id="scatter">Scatter</h2>
 <p><code>yerr=</code> and <code>xerr=</code> add error bars. Use
 <code>err_label=</code>, <code>xerr_label=</code>,
 <code>yerr_label=</code> for legend entries.</p>
-<div class="sourceCode" id="cb15"><pre
-class="sourceCode python"><code class="sourceCode python"><span id="cb15-1"><a href="#cb15-1" aria-hidden="true" tabindex="-1"></a>f, ax <span class="op">=</span> cp.fig()</span>
-<span id="cb15-2"><a href="#cb15-2" aria-hidden="true" tabindex="-1"></a>ax.scatter(x, y, xerr<span class="op">=</span>xerrs, yerr<span class="op">=</span>yerrs, label<span class="op">=</span><span class="st">&#39;Model A&#39;</span>,</span>
-<span id="cb15-3"><a href="#cb15-3" aria-hidden="true" tabindex="-1"></a>           xerr_label<span class="op">=</span><span class="st">&#39;time uncertainty&#39;</span>, yerr_label<span class="op">=</span><span class="st">&#39;accuracy uncertainty&#39;</span>)</span>
-<span id="cb15-4"><a href="#cb15-4" aria-hidden="true" tabindex="-1"></a>ax.clean(xlabel<span class="op">=</span><span class="st">&#39;Training time (min)&#39;</span>, ylabel<span class="op">=</span><span class="st">&#39;Accuracy&#39;</span>)</span></code></pre></div>
+<div class="sourceCode" id="cb16"><pre
+class="sourceCode python"><code class="sourceCode python"><span id="cb16-1"><a href="#cb16-1" aria-hidden="true" tabindex="-1"></a>f, ax <span class="op">=</span> cp.fig()</span>
+<span id="cb16-2"><a href="#cb16-2" aria-hidden="true" tabindex="-1"></a>ax.scatter(x, y, xerr<span class="op">=</span>xerrs, yerr<span class="op">=</span>yerrs, label<span class="op">=</span><span class="st">&#39;Model A&#39;</span>,</span>
+<span id="cb16-3"><a href="#cb16-3" aria-hidden="true" tabindex="-1"></a>           xerr_label<span class="op">=</span><span class="st">&#39;time uncertainty&#39;</span>, yerr_label<span class="op">=</span><span class="st">&#39;accuracy uncertainty&#39;</span>)</span>
+<span id="cb16-4"><a href="#cb16-4" aria-hidden="true" tabindex="-1"></a>ax.clean(xlabel<span class="op">=</span><span class="st">&#39;Training time (min)&#39;</span>, ylabel<span class="op">=</span><span class="st">&#39;Accuracy&#39;</span>)</span></code></pre></div>
 <p><img src="figures/scatter_xy_errorbars.png" width="30%"></p>
 <p>An Nx2 array or DataFrame splits into x, y (DataFrame column names
 become axis labels); Nx3 uses the third column as marker size.</p>
-<div class="sourceCode" id="cb16"><pre
-class="sourceCode python"><code class="sourceCode python"><span id="cb16-1"><a href="#cb16-1" aria-hidden="true" tabindex="-1"></a>ax.scatter(df[[<span class="st">&#39;PC1&#39;</span>, <span class="st">&#39;PC2&#39;</span>]], s<span class="op">=</span><span class="dv">15</span>, alpha<span class="op">=</span><span class="fl">0.6</span>)</span></code></pre></div>
+<div class="sourceCode" id="cb17"><pre
+class="sourceCode python"><code class="sourceCode python"><span id="cb17-1"><a href="#cb17-1" aria-hidden="true" tabindex="-1"></a>ax.scatter(df[[<span class="st">&#39;PC1&#39;</span>, <span class="st">&#39;PC2&#39;</span>]], s<span class="op">=</span><span class="dv">15</span>, alpha<span class="op">=</span><span class="fl">0.6</span>)</span></code></pre></div>
 <p><img src="figures/scatter_clusters.png" width="30%"></p>
 <h3 id="categorical-grouping">Categorical grouping</h3>
 <p><code>group=</code> assigns colors from the cycle and creates legend
 entries. Mutually exclusive with <code>c=</code>. Array-valued kwargs
 like <code>edgecolors</code> are automatically split per group.</p>
-<div class="sourceCode" id="cb17"><pre
-class="sourceCode python"><code class="sourceCode python"><span id="cb17-1"><a href="#cb17-1" aria-hidden="true" tabindex="-1"></a>f, ax <span class="op">=</span> cp.fig()</span>
-<span id="cb17-2"><a href="#cb17-2" aria-hidden="true" tabindex="-1"></a>ax.scatter(df[<span class="st">&#39;x&#39;</span>], df[<span class="st">&#39;y&#39;</span>], group<span class="op">=</span>df[<span class="st">&#39;class&#39;</span>],</span>
-<span id="cb17-3"><a href="#cb17-3" aria-hidden="true" tabindex="-1"></a>           edgecolors<span class="op">=</span>cp.cmaps.inferno(df[<span class="st">&#39;confidence&#39;</span>]), linewidths<span class="op">=</span><span class="fl">1.5</span>)</span>
-<span id="cb17-4"><a href="#cb17-4" aria-hidden="true" tabindex="-1"></a>cb <span class="op">=</span> ax.add_colorbar(cp.cmaps.inferno, values<span class="op">=</span>df[<span class="st">&#39;confidence&#39;</span>])</span>
-<span id="cb17-5"><a href="#cb17-5" aria-hidden="true" tabindex="-1"></a>cb.set_label(<span class="st">&#39;confidence&#39;</span>)</span>
-<span id="cb17-6"><a href="#cb17-6" aria-hidden="true" tabindex="-1"></a>ax.clean(xlabel<span class="op">=</span><span class="st">&#39;x&#39;</span>, ylabel<span class="op">=</span><span class="st">&#39;y&#39;</span>)</span></code></pre></div>
+<div class="sourceCode" id="cb18"><pre
+class="sourceCode python"><code class="sourceCode python"><span id="cb18-1"><a href="#cb18-1" aria-hidden="true" tabindex="-1"></a>f, ax <span class="op">=</span> cp.fig()</span>
+<span id="cb18-2"><a href="#cb18-2" aria-hidden="true" tabindex="-1"></a>ax.scatter(df[<span class="st">&#39;x&#39;</span>], df[<span class="st">&#39;y&#39;</span>], group<span class="op">=</span>df[<span class="st">&#39;class&#39;</span>],</span>
+<span id="cb18-3"><a href="#cb18-3" aria-hidden="true" tabindex="-1"></a>           edgecolors<span class="op">=</span>cp.cmaps.inferno(df[<span class="st">&#39;confidence&#39;</span>]), linewidths<span class="op">=</span><span class="fl">1.5</span>)</span>
+<span id="cb18-4"><a href="#cb18-4" aria-hidden="true" tabindex="-1"></a>cb <span class="op">=</span> ax.add_colorbar(cp.cmaps.inferno, values<span class="op">=</span>df[<span class="st">&#39;confidence&#39;</span>])</span>
+<span id="cb18-5"><a href="#cb18-5" aria-hidden="true" tabindex="-1"></a>cb.set_label(<span class="st">&#39;confidence&#39;</span>)</span>
+<span id="cb18-6"><a href="#cb18-6" aria-hidden="true" tabindex="-1"></a>ax.clean(xlabel<span class="op">=</span><span class="st">&#39;x&#39;</span>, ylabel<span class="op">=</span><span class="st">&#39;y&#39;</span>)</span></code></pre></div>
 <h3 id="colorbar-for-manual-color-mapping">Colorbar for manual color
 mapping</h3>
 <p><code>ax.add_colorbar(cmap, values)</code> creates a colorbar from a
 colormap and the data values that were mapped through it. Works on any
 axes, not just scatter.</p>
-<div class="sourceCode" id="cb18"><pre
-class="sourceCode python"><code class="sourceCode python"><span id="cb18-1"><a href="#cb18-1" aria-hidden="true" tabindex="-1"></a>cb <span class="op">=</span> ax.add_colorbar(cp.cmaps.inferno, values<span class="op">=</span>data)   <span class="co"># range from data</span></span>
-<span id="cb18-2"><a href="#cb18-2" aria-hidden="true" tabindex="-1"></a>cb <span class="op">=</span> ax.add_colorbar(cp.cmaps.inferno, vmin<span class="op">=</span><span class="dv">0</span>, vmax<span class="op">=</span><span class="dv">1</span>) <span class="co"># explicit range</span></span>
-<span id="cb18-3"><a href="#cb18-3" aria-hidden="true" tabindex="-1"></a>cb.set_label(<span class="st">&#39;confidence&#39;</span>)</span>
-<span id="cb18-4"><a href="#cb18-4" aria-hidden="true" tabindex="-1"></a>cb.set_ticks([<span class="dv">0</span>, <span class="fl">0.5</span>, <span class="dv">1</span>])</span></code></pre></div>
+<div class="sourceCode" id="cb19"><pre
+class="sourceCode python"><code class="sourceCode python"><span id="cb19-1"><a href="#cb19-1" aria-hidden="true" tabindex="-1"></a>cb <span class="op">=</span> ax.add_colorbar(cp.cmaps.inferno, values<span class="op">=</span>data)   <span class="co"># range from data</span></span>
+<span id="cb19-2"><a href="#cb19-2" aria-hidden="true" tabindex="-1"></a>cb <span class="op">=</span> ax.add_colorbar(cp.cmaps.inferno, vmin<span class="op">=</span><span class="dv">0</span>, vmax<span class="op">=</span><span class="dv">1</span>) <span class="co"># explicit range</span></span>
+<span id="cb19-3"><a href="#cb19-3" aria-hidden="true" tabindex="-1"></a>cb.set_label(<span class="st">&#39;confidence&#39;</span>)</span>
+<span id="cb19-4"><a href="#cb19-4" aria-hidden="true" tabindex="-1"></a>cb.set_ticks([<span class="dv">0</span>, <span class="fl">0.5</span>, <span class="dv">1</span>])</span></code></pre></div>
 <hr />
 <h2 id="heatmap">Heatmap</h2>
-<p>Takes a 2-d array or DataFrame. Handles annotations, colorbar, and
-tick labels. DataFrame index/column names become axis labels
-automatically.</p>
-<div class="sourceCode" id="cb19"><pre
-class="sourceCode python"><code class="sourceCode python"><span id="cb19-1"><a href="#cb19-1" aria-hidden="true" tabindex="-1"></a>f, ax <span class="op">=</span> cp.fig()</span>
-<span id="cb19-2"><a href="#cb19-2" aria-hidden="true" tabindex="-1"></a>cb <span class="op">=</span> ax.heatmap(conf, fmt<span class="op">=</span><span class="st">&#39;d&#39;</span>, cmap<span class="op">=</span><span class="st">&#39;Blues&#39;</span>)</span>
-<span id="cb19-3"><a href="#cb19-3" aria-hidden="true" tabindex="-1"></a>ax.clean(ticks<span class="op">=</span><span class="va">False</span>, spines<span class="op">=</span><span class="va">None</span>)</span></code></pre></div>
+<h3 id="hyperparameter-grid-search">Hyperparameter grid search</h3>
+<p>Starting from tidy cross-validation results:</p>
+<pre><code>     C      gamma  fold  test_accuracy
+0    0.01   0.001  0     0.71
+1    0.01   0.001  1     0.73
+...</code></pre>
+<p>Collapse over folds — the resulting DataFrame’s index and columns
+become axis labels:</p>
+<div class="sourceCode" id="cb21"><pre
+class="sourceCode python"><code class="sourceCode python"><span id="cb21-1"><a href="#cb21-1" aria-hidden="true" tabindex="-1"></a>mean <span class="op">=</span> cp.data.collapse(df, <span class="st">&#39;gamma&#39;</span>, <span class="st">&#39;test_accuracy&#39;</span>, over<span class="op">=</span><span class="st">&#39;fold&#39;</span>, func<span class="op">=</span><span class="st">&#39;mean&#39;</span>)</span>
+<span id="cb21-2"><a href="#cb21-2" aria-hidden="true" tabindex="-1"></a>std  <span class="op">=</span> cp.data.collapse(df, <span class="st">&#39;gamma&#39;</span>, <span class="st">&#39;test_accuracy&#39;</span>, over<span class="op">=</span><span class="st">&#39;fold&#39;</span>, func<span class="op">=</span><span class="st">&#39;std&#39;</span>)</span></code></pre></div>
+<pre><code>mean test_accuracy
+C            0.01   0.1    1.0    10.0   100.0
+gamma
+0.001        0.72   0.74   0.78   0.82   0.79
+0.01         0.73   0.76   0.83   0.90   0.85
+0.1          0.71   0.73   0.77   0.81   0.78
+1.0          0.70   0.71   0.72   0.73   0.72</code></pre>
+<div class="sourceCode" id="cb23"><pre
+class="sourceCode python"><code class="sourceCode python"><span id="cb23-1"><a href="#cb23-1" aria-hidden="true" tabindex="-1"></a>annot <span class="op">=</span> mean.<span class="bu">round</span>(<span class="dv">2</span>).astype(<span class="bu">str</span>) <span class="op">+</span> <span class="st">&#39;±&#39;</span> <span class="op">+</span> std.<span class="bu">round</span>(<span class="dv">2</span>).astype(<span class="bu">str</span>)</span>
+<span id="cb23-2"><a href="#cb23-2" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb23-3"><a href="#cb23-3" aria-hidden="true" tabindex="-1"></a>f, ax <span class="op">=</span> cp.fig()</span>
+<span id="cb23-4"><a href="#cb23-4" aria-hidden="true" tabindex="-1"></a>ax.heatmap(mean, annot_strings<span class="op">=</span>annot, cmap<span class="op">=</span><span class="st">&#39;Blues&#39;</span>)</span>
+<span id="cb23-5"><a href="#cb23-5" aria-hidden="true" tabindex="-1"></a>ax.clean(ticks<span class="op">=</span><span class="va">False</span>, spines<span class="op">=</span><span class="va">None</span>)</span></code></pre></div>
 <p><img src="figures/confusion_matrix.png" width="30%"></p>
 <p><code>heatmap</code> returns the matplotlib <code>Colorbar</code>
 object (or <code>None</code> if <code>cbar=False</code>), so you can set
 its label, ticks, etc. directly:</p>
-<div class="sourceCode" id="cb20"><pre
-class="sourceCode python"><code class="sourceCode python"><span id="cb20-1"><a href="#cb20-1" aria-hidden="true" tabindex="-1"></a>cb <span class="op">=</span> ax.heatmap(data, cmap<span class="op">=</span><span class="st">&#39;Blues&#39;</span>)</span>
-<span id="cb20-2"><a href="#cb20-2" aria-hidden="true" tabindex="-1"></a>cb.set_label(<span class="st">&#39;Count&#39;</span>)</span>
-<span id="cb20-3"><a href="#cb20-3" aria-hidden="true" tabindex="-1"></a>cb.set_ticks([<span class="dv">0</span>, <span class="dv">25</span>, <span class="dv">50</span>])</span></code></pre></div>
-<p>For custom annotation strings, pass <code>annot_strings=</code> with
-a same-shape array or DataFrame:</p>
-<div class="sourceCode" id="cb21"><pre
-class="sourceCode python"><code class="sourceCode python"><span id="cb21-1"><a href="#cb21-1" aria-hidden="true" tabindex="-1"></a>means <span class="op">=</span> cp.data.collapse(df, <span class="st">&#39;gamma&#39;</span>, <span class="st">&#39;test_accuracy&#39;</span>, over<span class="op">=</span><span class="st">&#39;fold&#39;</span>, func<span class="op">=</span><span class="st">&#39;mean&#39;</span>)</span>
-<span id="cb21-2"><a href="#cb21-2" aria-hidden="true" tabindex="-1"></a>stds  <span class="op">=</span> cp.data.collapse(df, <span class="st">&#39;gamma&#39;</span>, <span class="st">&#39;test_accuracy&#39;</span>, over<span class="op">=</span><span class="st">&#39;fold&#39;</span>, func<span class="op">=</span><span class="st">&#39;std&#39;</span>)</span>
-<span id="cb21-3"><a href="#cb21-3" aria-hidden="true" tabindex="-1"></a>annot <span class="op">=</span> means.<span class="bu">round</span>(<span class="dv">2</span>).astype(<span class="bu">str</span>) <span class="op">+</span> <span class="st">&#39;±&#39;</span> <span class="op">+</span> stds.<span class="bu">round</span>(<span class="dv">2</span>).astype(<span class="bu">str</span>)</span>
-<span id="cb21-4"><a href="#cb21-4" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb21-5"><a href="#cb21-5" aria-hidden="true" tabindex="-1"></a>f, ax <span class="op">=</span> cp.fig()</span>
-<span id="cb21-6"><a href="#cb21-6" aria-hidden="true" tabindex="-1"></a>ax.heatmap(means, annot_strings<span class="op">=</span>annot, cmap<span class="op">=</span><span class="st">&#39;Blues&#39;</span>)</span>
-<span id="cb21-7"><a href="#cb21-7" aria-hidden="true" tabindex="-1"></a>ax.clean(ticks<span class="op">=</span><span class="va">False</span>, spines<span class="op">=</span><span class="va">None</span>)</span></code></pre></div>
+<div class="sourceCode" id="cb24"><pre
+class="sourceCode python"><code class="sourceCode python"><span id="cb24-1"><a href="#cb24-1" aria-hidden="true" tabindex="-1"></a>cb <span class="op">=</span> ax.heatmap(data, cmap<span class="op">=</span><span class="st">&#39;Blues&#39;</span>)</span>
+<span id="cb24-2"><a href="#cb24-2" aria-hidden="true" tabindex="-1"></a>cb.set_label(<span class="st">&#39;Count&#39;</span>)</span>
+<span id="cb24-3"><a href="#cb24-3" aria-hidden="true" tabindex="-1"></a>cb.set_ticks([<span class="dv">0</span>, <span class="dv">25</span>, <span class="dv">50</span>])</span></code></pre></div>
 <hr />
 <h2 id="comparing-distributions">Comparing distributions</h2>
 <p><code>box</code>, <code>violin</code>, <code>strip</code>, and
 <code>hist</code> all take a dict of group name → array (or DataFrame /
-list of arrays). <code>box</code>, <code>violin</code>, and
-<code>strip</code> default to a single color; <code>hist</code> uses the
-color cycle.</p>
-<div class="sourceCode" id="cb22"><pre
-class="sourceCode python"><code class="sourceCode python"><span id="cb22-1"><a href="#cb22-1" aria-hidden="true" tabindex="-1"></a>data <span class="op">=</span> {<span class="st">&#39;LR&#39;</span>: scores_lr, <span class="st">&#39;RF&#39;</span>: scores_rf, <span class="st">&#39;GB&#39;</span>: scores_gb, <span class="st">&#39;MLP&#39;</span>: scores_mlp}</span>
-<span id="cb22-2"><a href="#cb22-2" aria-hidden="true" tabindex="-1"></a>ax.box(data)         <span class="co"># or ax.violin(data), or ax.strip(data)</span></span></code></pre></div>
+list of arrays).</p>
+<h3 id="grouped-layout-from-a-dataframe">Grouped layout from a
+DataFrame</h3>
+<p>To show distributions side-by-side (like a grouped bar chart but with
+raw data points), use <code>collapse</code> with <code>func=list</code>
+to collect raw values into arrays, then pass the resulting
+DataFrame:</p>
+<div class="sourceCode" id="cb25"><pre
+class="sourceCode python"><code class="sourceCode python"><span id="cb25-1"><a href="#cb25-1" aria-hidden="true" tabindex="-1"></a>df <span class="op">=</span> cp.data.collapse(data, <span class="st">&#39;model&#39;</span>, [<span class="st">&#39;precision&#39;</span>, <span class="st">&#39;recall&#39;</span>, <span class="st">&#39;f1&#39;</span>], over<span class="op">=</span><span class="st">&#39;seed&#39;</span>, func<span class="op">=</span><span class="bu">list</span>)</span></code></pre></div>
+<pre><code>metric          precision               recall                  f1
+model
+gradient_boost  [0.88, 0.87, 0.89, ...]  [0.92, 0.91, 0.93, ...]  [0.90, 0.89, ...]
+logistic        [0.82, 0.81, 0.83, ...]  [0.85, 0.84, 0.86, ...]  [0.83, 0.82, ...]
+mlp             [0.94, 0.93, 0.95, ...]  [0.90, 0.89, 0.91, ...]  [0.92, 0.91, ...]
+random_forest   [0.91, 0.90, 0.92, ...]  [0.87, 0.86, 0.88, ...]  [0.89, 0.88, ...]</code></pre>
+<p>Index → x-axis categories, columns → colored groups (matching
+<code>bar</code>):</p>
+<div class="sourceCode" id="cb27"><pre
+class="sourceCode python"><code class="sourceCode python"><span id="cb27-1"><a href="#cb27-1" aria-hidden="true" tabindex="-1"></a>ax.strip(df)     <span class="co"># or ax.box(df), or ax.violin(df)</span></span></code></pre></div>
 <p><img src="figures/box_plot.png" width="22%">
 <img src="figures/violin_plot.png" width="22%"></p>
 <p><img src="figures/strip_plot.png" width="30%"></p>
+<h3 id="histograms">Histograms</h3>
 <p><code>hist</code> draws overlaid histograms with shared bins. Uses
 <code>histtype='stepfilled'</code> and <code>alpha=0.5</code> by
-default. Extra kwargs forward to matplotlib’s <code>hist</code>.</p>
-<div class="sourceCode" id="cb23"><pre
-class="sourceCode python"><code class="sourceCode python"><span id="cb23-1"><a href="#cb23-1" aria-hidden="true" tabindex="-1"></a>f, ax <span class="op">=</span> cp.fig()</span>
-<span id="cb23-2"><a href="#cb23-2" aria-hidden="true" tabindex="-1"></a>ax.hist([baseline, tuned, ablation],</span>
-<span id="cb23-3"><a href="#cb23-3" aria-hidden="true" tabindex="-1"></a>        label<span class="op">=</span>[<span class="st">&#39;Baseline&#39;</span>, <span class="st">&#39;Tuned&#39;</span>, <span class="st">&#39;Ablation&#39;</span>],</span>
-<span id="cb23-4"><a href="#cb23-4" aria-hidden="true" tabindex="-1"></a>        bins<span class="op">=</span><span class="dv">40</span>, density<span class="op">=</span><span class="va">True</span>)</span>
-<span id="cb23-5"><a href="#cb23-5" aria-hidden="true" tabindex="-1"></a>ax.clean(xlabel<span class="op">=</span><span class="st">&#39;Prediction error&#39;</span>, ylabel<span class="op">=</span><span class="st">&#39;Density&#39;</span>)</span></code></pre></div>
+default.</p>
+<div class="sourceCode" id="cb28"><pre
+class="sourceCode python"><code class="sourceCode python"><span id="cb28-1"><a href="#cb28-1" aria-hidden="true" tabindex="-1"></a>f, ax <span class="op">=</span> cp.fig()</span>
+<span id="cb28-2"><a href="#cb28-2" aria-hidden="true" tabindex="-1"></a>ax.hist([baseline, tuned, ablation],</span>
+<span id="cb28-3"><a href="#cb28-3" aria-hidden="true" tabindex="-1"></a>        label<span class="op">=</span>[<span class="st">&#39;Baseline&#39;</span>, <span class="st">&#39;Tuned&#39;</span>, <span class="st">&#39;Ablation&#39;</span>],</span>
+<span id="cb28-4"><a href="#cb28-4" aria-hidden="true" tabindex="-1"></a>        bins<span class="op">=</span><span class="dv">40</span>, density<span class="op">=</span><span class="va">True</span>)</span>
+<span id="cb28-5"><a href="#cb28-5" aria-hidden="true" tabindex="-1"></a>ax.clean(xlabel<span class="op">=</span><span class="st">&#39;Prediction error&#39;</span>, ylabel<span class="op">=</span><span class="st">&#39;Density&#39;</span>)</span></code></pre></div>
 <p><img src="figures/hist_overlay.png" width="30%"></p>
-<p><code>log_x=True</code> gives log-spaced bins on a log x-axis.
-<code>bw_method=</code> on <code>violin</code> controls KDE smoothing
-(Scott’s rule by default). <code>box</code>, <code>violin</code>, and
-<code>strip</code> accept a pivot DataFrame for grouped layouts (index →
-x-axis categories, columns → colored groups, matching
-<code>bar</code>).</p>
+<p><code>log_x=True</code> gives log-spaced bins on a log x-axis.</p>
 <p><img src="figures/hist_overlay_log.png" width="30%"></p>
 <hr />
 <h2 id="multi-panel-layouts">Multi-panel layouts</h2>
-<div class="sourceCode" id="cb24"><pre
-class="sourceCode python"><code class="sourceCode python"><span id="cb24-1"><a href="#cb24-1" aria-hidden="true" tabindex="-1"></a>f, axes <span class="op">=</span> cp.fig(rows<span class="op">=</span><span class="dv">2</span>, cols<span class="op">=</span><span class="dv">2</span>)</span>
-<span id="cb24-2"><a href="#cb24-2" aria-hidden="true" tabindex="-1"></a>axes[<span class="dv">0</span>, <span class="dv">0</span>].line(loss)<span class="op">;</span>                    axes[<span class="dv">0</span>, <span class="dv">0</span>].clean(ylabel<span class="op">=</span><span class="st">&#39;Loss&#39;</span>, xlabel<span class="op">=</span><span class="st">&#39;Epoch&#39;</span>)</span>
-<span id="cb24-3"><a href="#cb24-3" aria-hidden="true" tabindex="-1"></a>axes[<span class="dv">0</span>, <span class="dv">1</span>].bar([<span class="st">&#39;A&#39;</span>, <span class="st">&#39;B&#39;</span>, <span class="st">&#39;C&#39;</span>], vals)<span class="op">;</span>    axes[<span class="dv">0</span>, <span class="dv">1</span>].clean(ylabel<span class="op">=</span><span class="st">&#39;Accuracy&#39;</span>)</span>
-<span id="cb24-4"><a href="#cb24-4" aria-hidden="true" tabindex="-1"></a>axes[<span class="dv">1</span>, <span class="dv">0</span>].scatter(embeddings, s<span class="op">=</span><span class="dv">20</span>)<span class="op">;</span>     axes[<span class="dv">1</span>, <span class="dv">0</span>].clean(xlabel<span class="op">=</span><span class="st">&#39;PC1&#39;</span>, ylabel<span class="op">=</span><span class="st">&#39;PC2&#39;</span>)</span>
-<span id="cb24-5"><a href="#cb24-5" aria-hidden="true" tabindex="-1"></a>axes[<span class="dv">1</span>, <span class="dv">1</span>].box({<span class="st">&#39;M1&#39;</span>: s1, <span class="st">&#39;M2&#39;</span>: s2})<span class="op">;</span>     axes[<span class="dv">1</span>, <span class="dv">1</span>].clean(ylabel<span class="op">=</span><span class="st">&#39;Score&#39;</span>)</span>
-<span id="cb24-6"><a href="#cb24-6" aria-hidden="true" tabindex="-1"></a>f.tight_layout()</span></code></pre></div>
+<div class="sourceCode" id="cb29"><pre
+class="sourceCode python"><code class="sourceCode python"><span id="cb29-1"><a href="#cb29-1" aria-hidden="true" tabindex="-1"></a>f, axes <span class="op">=</span> cp.fig(rows<span class="op">=</span><span class="dv">2</span>, cols<span class="op">=</span><span class="dv">2</span>)</span>
+<span id="cb29-2"><a href="#cb29-2" aria-hidden="true" tabindex="-1"></a>axes[<span class="dv">0</span>, <span class="dv">0</span>].line(loss)<span class="op">;</span>                    axes[<span class="dv">0</span>, <span class="dv">0</span>].clean(ylabel<span class="op">=</span><span class="st">&#39;Loss&#39;</span>, xlabel<span class="op">=</span><span class="st">&#39;Epoch&#39;</span>)</span>
+<span id="cb29-3"><a href="#cb29-3" aria-hidden="true" tabindex="-1"></a>axes[<span class="dv">0</span>, <span class="dv">1</span>].bar([<span class="st">&#39;A&#39;</span>, <span class="st">&#39;B&#39;</span>, <span class="st">&#39;C&#39;</span>], vals)<span class="op">;</span>    axes[<span class="dv">0</span>, <span class="dv">1</span>].clean(ylabel<span class="op">=</span><span class="st">&#39;Accuracy&#39;</span>)</span>
+<span id="cb29-4"><a href="#cb29-4" aria-hidden="true" tabindex="-1"></a>axes[<span class="dv">1</span>, <span class="dv">0</span>].scatter(embeddings, s<span class="op">=</span><span class="dv">20</span>)<span class="op">;</span>     axes[<span class="dv">1</span>, <span class="dv">0</span>].clean(xlabel<span class="op">=</span><span class="st">&#39;PC1&#39;</span>, ylabel<span class="op">=</span><span class="st">&#39;PC2&#39;</span>)</span>
+<span id="cb29-5"><a href="#cb29-5" aria-hidden="true" tabindex="-1"></a>axes[<span class="dv">1</span>, <span class="dv">1</span>].box({<span class="st">&#39;M1&#39;</span>: s1, <span class="st">&#39;M2&#39;</span>: s2})<span class="op">;</span>     axes[<span class="dv">1</span>, <span class="dv">1</span>].clean(ylabel<span class="op">=</span><span class="st">&#39;Score&#39;</span>)</span>
+<span id="cb29-6"><a href="#cb29-6" aria-hidden="true" tabindex="-1"></a>f.tight_layout()</span></code></pre></div>
 <p><img src="figures/grid_layout.png" width="30%"></p>
-<div class="sourceCode" id="cb25"><pre
-class="sourceCode python"><code class="sourceCode python"><span id="cb25-1"><a href="#cb25-1" aria-hidden="true" tabindex="-1"></a>f.subplots_adjust(hspace<span class="op">=</span><span class="fl">0.55</span>, wspace<span class="op">=</span><span class="fl">0.45</span>)   <span class="co"># when labels overlap</span></span></code></pre></div>
+<div class="sourceCode" id="cb30"><pre
+class="sourceCode python"><code class="sourceCode python"><span id="cb30-1"><a href="#cb30-1" aria-hidden="true" tabindex="-1"></a>f.subplots_adjust(hspace<span class="op">=</span><span class="fl">0.55</span>, wspace<span class="op">=</span><span class="fl">0.45</span>)   <span class="co"># when labels overlap</span></span></code></pre></div>
 <p><img src="figures/grid_layout_spaced.png" width="30%"></p>
 <hr />
 <h2 id="data-wrangling-cp.data">Data wrangling
@@ -470,29 +487,18 @@ class="sourceCode python"><code class="sourceCode python"><span id="cb25-1"><a h
 <p>Helpers for the tidy → wide → aggregated pipeline common in ML
 experiments. Loud errors over silent wrong numbers (uses
 <code>pivot</code>, not <code>pivot_table</code>).</p>
-<p>Starting from tidy data:</p>
-<pre><code>     model    lr  seed  epoch  train_loss  val_loss
-0    resnet  0.01     0      0        0.82      0.91
-1    resnet  0.01     0      1        0.54      0.63
-...</code></pre>
-<div class="sourceCode" id="cb27"><pre
-class="sourceCode python"><code class="sourceCode python"><span id="cb27-1"><a href="#cb27-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Lossless pivot: every non-index, non-value column becomes a column level</span></span>
-<span id="cb27-2"><a href="#cb27-2" aria-hidden="true" tabindex="-1"></a>wide <span class="op">=</span> cp.data.to_wide(df, index<span class="op">=</span><span class="st">&#39;epoch&#39;</span>, values<span class="op">=</span>[<span class="st">&#39;train_loss&#39;</span>, <span class="st">&#39;val_loss&#39;</span>])</span>
-<span id="cb27-3"><a href="#cb27-3" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb27-4"><a href="#cb27-4" aria-hidden="true" tabindex="-1"></a><span class="co"># Aggregate over a column level (like xarray .mean(dim=...))</span></span>
-<span id="cb27-5"><a href="#cb27-5" aria-hidden="true" tabindex="-1"></a>mean <span class="op">=</span> cp.data.agg_over(wide, col_level<span class="op">=</span><span class="st">&#39;seed&#39;</span>, func<span class="op">=</span><span class="st">&#39;mean&#39;</span>)</span>
-<span id="cb27-6"><a href="#cb27-6" aria-hidden="true" tabindex="-1"></a>std  <span class="op">=</span> cp.data.agg_over(wide, col_level<span class="op">=</span><span class="st">&#39;seed&#39;</span>, func<span class="op">=</span><span class="st">&#39;std&#39;</span>)</span>
-<span id="cb27-7"><a href="#cb27-7" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb27-8"><a href="#cb27-8" aria-hidden="true" tabindex="-1"></a><span class="co"># Or in one step:</span></span>
-<span id="cb27-9"><a href="#cb27-9" aria-hidden="true" tabindex="-1"></a>mean <span class="op">=</span> cp.data.collapse(df, index<span class="op">=</span><span class="st">&#39;epoch&#39;</span>, values<span class="op">=</span>[<span class="st">&#39;train_loss&#39;</span>, <span class="st">&#39;val_loss&#39;</span>],</span>
-<span id="cb27-10"><a href="#cb27-10" aria-hidden="true" tabindex="-1"></a>                         over<span class="op">=</span><span class="st">&#39;seed&#39;</span>, func<span class="op">=</span><span class="st">&#39;mean&#39;</span>)  <span class="co"># func is required</span></span>
-<span id="cb27-11"><a href="#cb27-11" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb27-12"><a href="#cb27-12" aria-hidden="true" tabindex="-1"></a><span class="co"># Filter by column level (like xarray .sel())</span></span>
-<span id="cb27-13"><a href="#cb27-13" aria-hidden="true" tabindex="-1"></a>cp.data.<span class="bu">slice</span>(mean, model<span class="op">=</span><span class="st">&#39;resnet&#39;</span>)</span>
-<span id="cb27-14"><a href="#cb27-14" aria-hidden="true" tabindex="-1"></a>cp.data.<span class="bu">slice</span>(mean, metric<span class="op">=</span><span class="st">&#39;train_loss&#39;</span>, lr<span class="op">=</span><span class="fl">0.01</span>)</span></code></pre></div>
-<p>Note on <code>std</code>: <code>func='std'</code> uses pandas default
-(ddof=1, sample std). With few seeds, this differs from
-<code>np.std</code> (ddof=0).</p>
+<div class="sourceCode" id="cb31"><pre
+class="sourceCode python"><code class="sourceCode python"><span id="cb31-1"><a href="#cb31-1" aria-hidden="true" tabindex="-1"></a><span class="co"># One-step: pivot + aggregate</span></span>
+<span id="cb31-2"><a href="#cb31-2" aria-hidden="true" tabindex="-1"></a>mean <span class="op">=</span> cp.data.collapse(df, index<span class="op">=</span><span class="st">&#39;epoch&#39;</span>, values<span class="op">=</span>[<span class="st">&#39;train_loss&#39;</span>, <span class="st">&#39;val_loss&#39;</span>],</span>
+<span id="cb31-3"><a href="#cb31-3" aria-hidden="true" tabindex="-1"></a>                         over<span class="op">=</span><span class="st">&#39;seed&#39;</span>, func<span class="op">=</span><span class="st">&#39;mean&#39;</span>)</span>
+<span id="cb31-4"><a href="#cb31-4" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb31-5"><a href="#cb31-5" aria-hidden="true" tabindex="-1"></a><span class="co"># Two-step equivalent:</span></span>
+<span id="cb31-6"><a href="#cb31-6" aria-hidden="true" tabindex="-1"></a>wide <span class="op">=</span> cp.data.to_wide(df, index<span class="op">=</span><span class="st">&#39;epoch&#39;</span>, values<span class="op">=</span>[<span class="st">&#39;train_loss&#39;</span>, <span class="st">&#39;val_loss&#39;</span>])</span>
+<span id="cb31-7"><a href="#cb31-7" aria-hidden="true" tabindex="-1"></a>mean <span class="op">=</span> cp.data.agg_over(wide, col_level<span class="op">=</span><span class="st">&#39;seed&#39;</span>, func<span class="op">=</span><span class="st">&#39;mean&#39;</span>)</span>
+<span id="cb31-8"><a href="#cb31-8" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb31-9"><a href="#cb31-9" aria-hidden="true" tabindex="-1"></a><span class="co"># Filter by column level</span></span>
+<span id="cb31-10"><a href="#cb31-10" aria-hidden="true" tabindex="-1"></a>cp.data.<span class="bu">slice</span>(mean, model<span class="op">=</span><span class="st">&#39;resnet&#39;</span>)</span>
+<span id="cb31-11"><a href="#cb31-11" aria-hidden="true" tabindex="-1"></a>cp.data.<span class="bu">slice</span>(mean, metric<span class="op">=</span><span class="st">&#39;train_loss&#39;</span>, lr<span class="op">=</span><span class="fl">0.01</span>)</span></code></pre></div>
 <hr />
 <h2 id="colormaps">Colormaps</h2>
 <p>Access via <code>cp.cmaps.&lt;name&gt;</code>.</p>
@@ -549,20 +555,20 @@ class="sourceCode python"><code class="sourceCode python"><span id="cb27-1"><a h
 <p>Matplotlib features that cleanplots doesn’t wrap. Work on any
 <code>CleanAxes</code> (it’s an <code>Axes</code> subclass).</p>
 <h3 id="rotate-tick-labels">Rotate tick labels</h3>
-<div class="sourceCode" id="cb28"><pre
-class="sourceCode python"><code class="sourceCode python"><span id="cb28-1"><a href="#cb28-1" aria-hidden="true" tabindex="-1"></a>ax.tick_params(axis<span class="op">=</span><span class="st">&#39;x&#39;</span>, rotation<span class="op">=</span><span class="dv">45</span>)</span>
-<span id="cb28-2"><a href="#cb28-2" aria-hidden="true" tabindex="-1"></a>plt.setp(ax.get_xticklabels(), ha<span class="op">=</span><span class="st">&#39;right&#39;</span>)</span></code></pre></div>
+<div class="sourceCode" id="cb32"><pre
+class="sourceCode python"><code class="sourceCode python"><span id="cb32-1"><a href="#cb32-1" aria-hidden="true" tabindex="-1"></a>ax.tick_params(axis<span class="op">=</span><span class="st">&#39;x&#39;</span>, rotation<span class="op">=</span><span class="dv">45</span>)</span>
+<span id="cb32-2"><a href="#cb32-2" aria-hidden="true" tabindex="-1"></a>plt.setp(ax.get_xticklabels(), ha<span class="op">=</span><span class="st">&#39;right&#39;</span>)</span></code></pre></div>
 <p><img src="figures/trick_rotation.png" width="45%"></p>
 <h3 id="annotate-a-point">Annotate a point</h3>
-<div class="sourceCode" id="cb29"><pre
-class="sourceCode python"><code class="sourceCode python"><span id="cb29-1"><a href="#cb29-1" aria-hidden="true" tabindex="-1"></a>ax.annotate(<span class="st">&#39;best&#39;</span>,</span>
-<span id="cb29-2"><a href="#cb29-2" aria-hidden="true" tabindex="-1"></a>            xy<span class="op">=</span>(<span class="dv">150</span>, <span class="fl">0.93</span>), xytext<span class="op">=</span>(<span class="dv">100</span>, <span class="fl">0.80</span>),</span>
-<span id="cb29-3"><a href="#cb29-3" aria-hidden="true" tabindex="-1"></a>            fontsize<span class="op">=</span><span class="dv">11</span>,</span>
-<span id="cb29-4"><a href="#cb29-4" aria-hidden="true" tabindex="-1"></a>            arrowprops<span class="op">=</span><span class="bu">dict</span>(arrowstyle<span class="op">=</span><span class="st">&#39;-&gt;&#39;</span>, color<span class="op">=</span><span class="st">&#39;gray&#39;</span>, lw<span class="op">=</span><span class="dv">1</span>))</span></code></pre></div>
+<div class="sourceCode" id="cb33"><pre
+class="sourceCode python"><code class="sourceCode python"><span id="cb33-1"><a href="#cb33-1" aria-hidden="true" tabindex="-1"></a>ax.annotate(<span class="st">&#39;best&#39;</span>,</span>
+<span id="cb33-2"><a href="#cb33-2" aria-hidden="true" tabindex="-1"></a>            xy<span class="op">=</span>(<span class="dv">150</span>, <span class="fl">0.93</span>), xytext<span class="op">=</span>(<span class="dv">100</span>, <span class="fl">0.80</span>),</span>
+<span id="cb33-3"><a href="#cb33-3" aria-hidden="true" tabindex="-1"></a>            fontsize<span class="op">=</span><span class="dv">11</span>,</span>
+<span id="cb33-4"><a href="#cb33-4" aria-hidden="true" tabindex="-1"></a>            arrowprops<span class="op">=</span><span class="bu">dict</span>(arrowstyle<span class="op">=</span><span class="st">&#39;-&gt;&#39;</span>, color<span class="op">=</span><span class="st">&#39;gray&#39;</span>, lw<span class="op">=</span><span class="dv">1</span>))</span></code></pre></div>
 <p><img src="figures/trick_annotate.png" width="30%"></p>
 <h3 id="square-axes">Square axes</h3>
-<div class="sourceCode" id="cb30"><pre
-class="sourceCode python"><code class="sourceCode python"><span id="cb30-1"><a href="#cb30-1" aria-hidden="true" tabindex="-1"></a>ax.set_aspect(<span class="st">&#39;equal&#39;</span>)</span></code></pre></div>
+<div class="sourceCode" id="cb34"><pre
+class="sourceCode python"><code class="sourceCode python"><span id="cb34-1"><a href="#cb34-1" aria-hidden="true" tabindex="-1"></a>ax.set_aspect(<span class="st">&#39;equal&#39;</span>)</span></code></pre></div>
 <p><img src="figures/trick_aspect_equal.png" width="45%"></p>
 </body>
 </html>

@@ -21,21 +21,12 @@ ax.clean(xlabel='X', ylabel='Y')          # standard cleanup
 ax.clean(ticks=None, spines=None)         # no axes (for images)
 ```
 
-**Input forms.** `line`, `bar`, `barh`, and `scatter` all accept the same input shapes:
-
-```python
-ax.line(y_values)                                # x inferred as range
-ax.line(x_values, y_values)                      # standard
-ax.line([y1, y2, y3], label=['A', 'B', 'C'])     # list of arrays → multiple series
-```
-
-**Error representation.** `err=` adds error visualization (shaded band for lines, error bars for bar/scatter). `err_label=` creates a single shared legend entry for the error.
+**Error representation.** `err=` adds error visualization (shaded band for lines, error bars for bar/scatter). Accepts symmetric error, a `(lower, upper)` tuple, or an Nx2 array. `err_label=` creates a single shared legend entry.
 
 **Legend.** `clean()` builds the legend automatically. Pass `legend=False` to any plot call to suppress it entirely. To reposition:
 
 ```python
-ax.line(x, y, label='A', legend=False)    # no legend on this axes
-ax.get_legend().set_loc('upper left')     # or reposition after clean()
+ax.get_legend().set_loc('upper left')     # reposition after clean()
 ```
 
 **Color labels.** `clean()` automatically replaces multi-color legend entries with colored text. To place a color-label block manually:
@@ -50,21 +41,63 @@ ax.color_labels(['MLP', 'RF', 'Transformer'], x=0.05, ha='left')
 
 ## Line plots
 
-```python
-f, ax = cp.fig()
-ax.line(x, y1, err=std1, label='Model A', err_label='±1 SD')
-ax.line(x, y2, err=std2, label='Model B')
-ax.clean(xlabel='Step', ylabel='Score')
+### Training curves with error bands
+
+Starting from tidy per-epoch data:
+
+```
+     model    lr  seed  epoch  train_loss  val_loss
+0    resnet  0.01     0      0        0.82      0.91
+1    resnet  0.01     0      1        0.54      0.63
+...
 ```
 
-<img src="figures/error_band.png" width="30%">
-
-### Many runs in one color
-
-A single `color=` and `alpha=` on a list of arrays overlays them in the same color. A single `label=` string produces one shared legend entry.
+Aggregate over seeds with `cp.data.collapse`:
 
 ```python
-f, ax = cp.fig()
+mean = cp.data.collapse(df, 'epoch', ['train_loss', 'val_loss'], over='seed', func='mean')
+std  = cp.data.collapse(df, 'epoch', ['train_loss', 'val_loss'], over='seed', func='std')
+```
+
+The resulting DataFrame has MultiIndex columns. The top level (`metric`) maps to line styles, remaining levels (`model`, `lr`) map to colors:
+
+```
+metric     train_loss                    val_loss
+model      resnet       mlp              resnet       mlp
+lr         0.01  0.001  0.01  0.001      0.01  0.001  0.01  0.001
+epoch
+0          0.82  0.91   1.01  1.12       0.91  1.02   1.12  1.24
+1          0.54  0.63   0.72  0.81       0.63  0.73   0.82  0.92
+...
+```
+
+Use `cp.data.slice` to filter, then plot:
+
+```python
+f, (ax1, ax2) = cp.fig(cols=2, sharey=True)
+ax1.line(cp.data.slice(mean, lr=0.001), err=cp.data.slice(std, lr=0.001), err_label='±1 SD')
+ax1.clean(ylabel='Loss', title='lr 0.001')
+ax2.line(cp.data.slice(mean, lr=0.01), err=cp.data.slice(std, lr=0.01), legend=False)
+ax2.clean(title='lr 0.01')
+```
+
+<img src="figures/wide_multi_line.png" width="30%">
+
+### Plotting individual runs
+
+Pass a single `color=` and `label=` to overlay multiple same-colored lines. When `color=` and `label=` are both set on a DataFrame, you get one color legend entry plus shared linestyle entries:
+
+```python
+wide = cp.data.to_wide(df, 'epoch', ['train_loss', 'val_loss'])
+
+for i, model in enumerate(['small', 'medium', 'large']):
+    ax.line(cp.data.slice(wide, model=model), color=cp.colors[i], label=model, alpha=0.5)
+ax.clean()
+```
+
+For raw arrays (e.g. RL reward curves), a list of arrays works directly:
+
+```python
 ax.line(runs, color=cp.colors[0], alpha=0.3, label='Runs')
 ax.line(np.mean(runs, axis=0), color=cp.colors[0], lw=2, label='Mean')
 ax.clean(xlabel='Step', ylabel='Reward')
@@ -72,86 +105,61 @@ ax.clean(xlabel='Step', ylabel='Reward')
 
 <img src="figures/multi_run.png" width="30%">
 
-### Pivot DataFrame
-
-Rows map to colors, columns to line styles. `err=` adds shaded bands.
-
-A typical starting point is a flat run log:
-
-```
->>> runs
-     model  seed       train_loss              val_loss
-0    MLP       0  [2.48, 2.33, ...]     [2.59, 2.42, ...]
-1    MLP       1  [2.51, 2.30, ...]     [2.62, 2.40, ...]
-2    MLP       2  [2.46, 2.34, ...]     [2.58, 2.43, ...]
-3    Tx        0  [1.98, 1.87, ...]     [2.09, 1.96, ...]
-4    Tx        1  ...                   ...
-```
-
-Aggregate across seeds:
-
-```python
-pivot     = (runs.drop(columns='seed').groupby('model')
-                 .agg(lambda s: np.mean(np.stack(s.values), axis=0)))
-pivot_std = (runs.drop(columns='seed').groupby('model')
-                 .agg(lambda s: np.std (np.stack(s.values), axis=0)))
-```
-
-```python
-f, ax = cp.fig()
-ax.line(pivot, err=pivot_std, err_label='±1 SD')
-ax.clean(xlabel='Epoch')
-```
-
-<img src="figures/pivot_line.png" width="30%">
-
-### Wide DataFrame with MultiIndex columns
-
-DataFrames from `cp.data.collapse()` have MultiIndex columns. The top column level maps to line styles, remaining levels map to colors.
-
-```python
-mean = cp.data.collapse(df, index='epoch', values=['train_loss', 'val_loss'],
-                         over='seed', func='mean')
-std  = cp.data.collapse(df, index='epoch', values=['train_loss', 'val_loss'],
-                         over='seed', func='std')
-
-f, ax = cp.fig()
-ax.line(mean, err=std, err_label='±1 SD')
-ax.clean(ylabel='Loss')
-```
-
-<img src="figures/wide_multi_line.png" width="30%">
-
 ---
 
 ## Bar charts
 
-```python
-f, ax = cp.fig()
-ax.bar(model_names, accuracies, err=stds, err_label='±1 SD')
-ax.clean(ylabel='Accuracy')
+### Grouped bar chart with error bars
+
+Starting from tidy per-seed metrics:
+
+```
+     model           seed  precision  recall    f1
+0    random_forest   0     0.92       0.88      0.90
+1    random_forest   1     0.90       0.86      0.88
+...
 ```
 
-<img src="figures/bar_chart.png" width="30%">
-
-`barh` mirrors `bar` with horizontal orientation (same input forms, `err=`, DataFrame grouping, `log_x=`):
+Collapse over seeds:
 
 ```python
-f, ax = cp.fig()
-ax.barh(model_names, accuracies, err=stds, err_label='±1 SD')
-ax.clean(xlabel='Accuracy')
+mean = cp.data.collapse(df, 'model', ['precision', 'recall', 'f1'], over='seed', func='mean')
+std  = cp.data.collapse(df, 'model', ['precision', 'recall', 'f1'], over='seed', func='std')
 ```
 
-A DataFrame produces grouped bars (columns → groups, rows → categories):
+Result — index becomes x-axis categories, columns become colored groups:
+
+```
+metric          precision  recall    f1
+model
+gradient_boost  0.88       0.92      0.90
+logistic        0.82       0.85      0.83
+mlp             0.94       0.90      0.92
+random_forest   0.91       0.87      0.89
+```
 
 ```python
 f, ax = cp.fig()
-ax.bar(df, err=err_df, err_label='±1 SD')
+ax.bar(mean, err=std, err_label='±1 SD')
 ax.clean(ylabel='Score')
-ax.get_legend().set_loc('upper left')
 ```
 
 <img src="figures/grouped_bar.png" width="30%">
+
+### Horizontal bar chart
+
+For single-metric results, `collapse` returns a Series. Pass it directly to `barh`:
+
+```python
+mean = cp.data.collapse(df, 'feature', 'importance', over='seed', func='mean')
+std  = cp.data.collapse(df, 'feature', 'importance', over='seed', func='std')
+
+f, ax = cp.fig()
+ax.barh(mean, err=std)
+ax.clean()
+```
+
+<img src="figures/bar_chart.png" width="30%">
 
 ---
 
@@ -204,11 +212,39 @@ cb.set_ticks([0, 0.5, 1])
 
 ## Heatmap
 
-Takes a 2-d array or DataFrame. Handles annotations, colorbar, and tick labels. DataFrame index/column names become axis labels automatically.
+### Hyperparameter grid search
+
+Starting from tidy cross-validation results:
+
+```
+     C      gamma  fold  test_accuracy
+0    0.01   0.001  0     0.71
+1    0.01   0.001  1     0.73
+...
+```
+
+Collapse over folds — the resulting DataFrame's index and columns become axis labels:
 
 ```python
+mean = cp.data.collapse(df, 'gamma', 'test_accuracy', over='fold', func='mean')
+std  = cp.data.collapse(df, 'gamma', 'test_accuracy', over='fold', func='std')
+```
+
+```
+mean test_accuracy
+C            0.01   0.1    1.0    10.0   100.0
+gamma
+0.001        0.72   0.74   0.78   0.82   0.79
+0.01         0.73   0.76   0.83   0.90   0.85
+0.1          0.71   0.73   0.77   0.81   0.78
+1.0          0.70   0.71   0.72   0.73   0.72
+```
+
+```python
+annot = mean.round(2).astype(str) + '±' + std.round(2).astype(str)
+
 f, ax = cp.fig()
-cb = ax.heatmap(conf, fmt='d', cmap='Blues')
+ax.heatmap(mean, annot_strings=annot, cmap='Blues')
 ax.clean(ticks=False, spines=None)
 ```
 
@@ -222,34 +258,42 @@ cb.set_label('Count')
 cb.set_ticks([0, 25, 50])
 ```
 
-For custom annotation strings, pass `annot_strings=` with a same-shape array or DataFrame:
-
-```python
-means = cp.data.collapse(df, 'gamma', 'test_accuracy', over='fold', func='mean')
-stds  = cp.data.collapse(df, 'gamma', 'test_accuracy', over='fold', func='std')
-annot = means.round(2).astype(str) + '±' + stds.round(2).astype(str)
-
-f, ax = cp.fig()
-ax.heatmap(means, annot_strings=annot, cmap='Blues')
-ax.clean(ticks=False, spines=None)
-```
-
 ---
 
 ## Comparing distributions
 
-`box`, `violin`, `strip`, and `hist` all take a dict of group name → array (or DataFrame / list of arrays). `box`, `violin`, and `strip` default to a single color; `hist` uses the color cycle.
+`box`, `violin`, `strip`, and `hist` all take a dict of group name → array (or DataFrame / list of arrays).
+
+### Grouped layout from a DataFrame
+
+To show distributions side-by-side (like a grouped bar chart but with raw data points), use `collapse` with `func=list` to collect raw values into arrays, then pass the resulting DataFrame:
 
 ```python
-data = {'LR': scores_lr, 'RF': scores_rf, 'GB': scores_gb, 'MLP': scores_mlp}
-ax.box(data)         # or ax.violin(data), or ax.strip(data)
+df = cp.data.collapse(data, 'model', ['precision', 'recall', 'f1'], over='seed', func=list)
+```
+
+```
+metric          precision               recall                  f1
+model
+gradient_boost  [0.88, 0.87, 0.89, ...]  [0.92, 0.91, 0.93, ...]  [0.90, 0.89, ...]
+logistic        [0.82, 0.81, 0.83, ...]  [0.85, 0.84, 0.86, ...]  [0.83, 0.82, ...]
+mlp             [0.94, 0.93, 0.95, ...]  [0.90, 0.89, 0.91, ...]  [0.92, 0.91, ...]
+random_forest   [0.91, 0.90, 0.92, ...]  [0.87, 0.86, 0.88, ...]  [0.89, 0.88, ...]
+```
+
+Index → x-axis categories, columns → colored groups (matching `bar`):
+
+```python
+ax.strip(df)     # or ax.box(df), or ax.violin(df)
 ```
 
 <img src="figures/box_plot.png" width="22%"> <img src="figures/violin_plot.png" width="22%">
 
 <img src="figures/strip_plot.png" width="30%">
 
-`hist` draws overlaid histograms with shared bins. Uses `histtype='stepfilled'` and `alpha=0.5` by default. Extra kwargs forward to matplotlib's `hist`.
+### Histograms
+
+`hist` draws overlaid histograms with shared bins. Uses `histtype='stepfilled'` and `alpha=0.5` by default.
 
 ```python
 f, ax = cp.fig()
@@ -261,7 +305,7 @@ ax.clean(xlabel='Prediction error', ylabel='Density')
 
 <img src="figures/hist_overlay.png" width="30%">
 
-`log_x=True` gives log-spaced bins on a log x-axis. `bw_method=` on `violin` controls KDE smoothing (Scott's rule by default). `box`, `violin`, and `strip` accept a pivot DataFrame for grouped layouts (index → x-axis categories, columns → colored groups, matching `bar`).
+`log_x=True` gives log-spaced bins on a log x-axis.
 
 <img src="figures/hist_overlay_log.png" width="30%">
 
@@ -292,33 +336,19 @@ f.subplots_adjust(hspace=0.55, wspace=0.45)   # when labels overlap
 
 Helpers for the tidy → wide → aggregated pipeline common in ML experiments. Loud errors over silent wrong numbers (uses `pivot`, not `pivot_table`).
 
-Starting from tidy data:
-
-```
-     model    lr  seed  epoch  train_loss  val_loss
-0    resnet  0.01     0      0        0.82      0.91
-1    resnet  0.01     0      1        0.54      0.63
-...
-```
-
 ```python
-# Lossless pivot: every non-index, non-value column becomes a column level
-wide = cp.data.to_wide(df, index='epoch', values=['train_loss', 'val_loss'])
-
-# Aggregate over a column level (like xarray .mean(dim=...))
-mean = cp.data.agg_over(wide, col_level='seed', func='mean')
-std  = cp.data.agg_over(wide, col_level='seed', func='std')
-
-# Or in one step:
+# One-step: pivot + aggregate
 mean = cp.data.collapse(df, index='epoch', values=['train_loss', 'val_loss'],
-                         over='seed', func='mean')  # func is required
+                         over='seed', func='mean')
 
-# Filter by column level (like xarray .sel())
+# Two-step equivalent:
+wide = cp.data.to_wide(df, index='epoch', values=['train_loss', 'val_loss'])
+mean = cp.data.agg_over(wide, col_level='seed', func='mean')
+
+# Filter by column level
 cp.data.slice(mean, model='resnet')
 cp.data.slice(mean, metric='train_loss', lr=0.01)
 ```
-
-Note on `std`: `func='std'` uses pandas default (ddof=1, sample std). With few seeds, this differs from `np.std` (ddof=0).
 
 ---
 
