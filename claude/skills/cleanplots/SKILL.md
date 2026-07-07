@@ -33,6 +33,7 @@ documents). If the jld skill is not installed, the table below suffices.
 | Question about the data | cleanplots call |
 |---|---|
 | Comparison among items | `ax.barh(series)` — horizontal, labels readable, bars from zero |
+| Grouped comparison (items × metric) | `ax.barh(df, err=std_df)` — horizontal grouped bars (one group per column); vertical `ax.bar` only if the user asks (confirmed ruling) |
 | Comparison of close values | dots on a scale that need not start at zero (position, not length) |
 | Distribution | all points when practical; histogram; box plots only for large sets |
 | Correlation (2 continuous vars) | `ax.scatter(df[['x', 'y']])` |
