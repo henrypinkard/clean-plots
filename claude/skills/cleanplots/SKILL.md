@@ -5,8 +5,12 @@ description: Make matplotlib plots with the cleanplots Python library (cp.fig() 
 
 # cleanplots
 
-Repo: `~/GitRepos/clean-plots`. API reference: `docs/gallery.md` there — read
-the relevant section before writing nontrivial plotting code.
+The library may be installed via pip/uv with no local checkout — don't go
+looking for a repo. API reference: `docs/gallery.md` in the repo
+(`~/GitRepos/clean-plots` if present, else
+https://github.com/henrypinkard/cleanplots); failing both, introspect the
+installed package. Read the relevant section before writing nontrivial
+plotting code.
 
 ```python
 import cleanplots as cp
