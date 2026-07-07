@@ -1,14 +1,14 @@
 ---
 name: cleanplots
-description: Make matplotlib plots with the cleanplots Python library (cp.fig() → plot calls → ax.clean()) — the user's standard for all Python plotting. Use whenever writing or editing Python plotting code for the user, whether paper figures, slide figures, notebooks, or quick data looks. Graph-type choice and figure design come from the jld skill's graphics bundle; this skill covers the library and the user's visual style.
+description: Make matplotlib plots with the cleanplots Python library (cp.fig() → plot calls → ax.clean()) — the user's standard for all Python plotting. Use whenever writing or editing Python plotting code for the user: paper figures, slide figures, notebooks, quick data looks. Graph choice comes from the jld skill's graphics bundle; this skill covers the library and the user's visual style.
 ---
 
 # cleanplots — Method-Grade Plots in Python
 
 `cleanplots` wraps matplotlib so high signal-to-noise defaults are the path of
-least resistance. Repo: `~/GitRepos/clean-plots`; the full API reference with
-worked examples is `docs/gallery.md` there — read the relevant section before
-writing nontrivial plotting code.
+least resistance. Repo: `~/GitRepos/clean-plots`; the API reference is
+`docs/gallery.md` there — read the relevant section before writing nontrivial
+plotting code.
 
 ## Workflow
 
@@ -33,8 +33,8 @@ documents). If the jld skill is not installed, the table below suffices.
 | Question about the data | cleanplots call |
 |---|---|
 | Comparison among items | `ax.barh(series)` — horizontal, labels readable, bars from zero |
-| Grouped comparison (items × metric) | `ax.barh(df)` — horizontal grouped bars (one group per column); vertical `ax.bar` only if the user asks (confirmed ruling) |
-| Comparison with uncertainty | markers, not bars: dots with two-sided whiskers, e.g. `ax.scatter(values, positions, xerr=err)` — a position representation resolves intervals; bars with `err=` only if the user asks (confirmed ruling, textbook p. 134) |
+| Grouped comparison (items × metric) | `ax.barh(df)` — horizontal grouped bars, one group per column; vertical `ax.bar` only on request (user ruling) |
+| Comparison with uncertainty | dots with two-sided whiskers: `ax.scatter(values, positions, xerr=err)` — position resolves intervals, length (bars) cannot; bars with `err=` only on request (user ruling; textbook p. 134) |
 | Comparison of close values | dots on a scale that need not start at zero (position, not length) |
 | Distribution | all points when practical; histogram; box plots only for large sets |
 | Correlation (2 continuous vars) | `ax.scatter(df[['x', 'y']])` |
@@ -56,22 +56,21 @@ frames around fills).
 
 ## Where the User's Style Deviates from the Textbook (Deliberate)
 
-- **Label placement.** The textbook wants labels directly adjacent to the
-  data, and the user agrees — but adjacency is hard to automate. Accepted
-  flow: place colored text near the data with
-  `ax.color_labels([...], x=, y=)` when feasible; otherwise accept `clean()`'s
-  automatic colored-text legend replacement and leave final adjacency for
-  Illustrator. Don't contort code chasing perfect adjacency.
+- **Label placement.** The user agrees with the textbook's
+  labels-adjacent-to-data rule, but adjacency is hard to automate. Place
+  colored text near the data with `ax.color_labels([...], x=, y=)` when
+  feasible; otherwise accept `clean()`'s colored-text legend and leave
+  adjacency for Illustrator. Don't contort code chasing it.
 - **Tick density.** The textbook's two-tick, data-relevant scales are too
   sparse for the user's taste. Keep `clean()`'s `ticks='sparse'` default; do
   not strip axes down to two marks.
 
-If some other textbook rule fights a library default or an existing figure,
-flag the conflict to the user instead of silently picking a side; confirmed
-rulings get added to this list.
+If another textbook rule fights a library default or an existing figure, flag
+the conflict to the user rather than silently picking a side; rulings get
+added to this list.
 
 ## Captions
 
-Every figure destined for a document gets a message-first, self-contained
-caption (the takeaway as a complete sentence, then the minimum detail needed
-to stand alone) — see the jld caption bundle above.
+Every figure destined for a document gets a message-first caption: the
+takeaway as a complete sentence, then the minimum detail to stand alone
+(jld caption bundle above).
