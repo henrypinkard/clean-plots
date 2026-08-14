@@ -27,8 +27,8 @@ __all__ = [
     'get_color_cycle',
 ]
 
-# Default color cycle
-# https://davidmathlogic.com/colorblind/#%23179EE8-%235A00A0-%2321CA10-%23FF005B-%23D40E9F-%235A5A5A-%23DCCC02-%23FF7400
+# Default color cycle, in a deliberate colorblind-friendly order -- do not reorder.
+# https://davidmathlogic.com/colorblind/#%23179EE8-%2357B50F-%235A00A0-%23419292-%23D900FF-%23F37C2F-%23ACAD9D-%23FF005B-%23E8B70F-%238B4513
 colors =  ['#179EE8', '#57B50F', '#5A00A0', '#419292',
            '#D900FF', '#F37C2F', '#ACAD9D', '#FF005B',
            '#E8B70F', '#8B4513',]

@@ -24,6 +24,7 @@ setuptools.setup(
     install_requires=[
         "numpy",
         "cmocean",
+        "cmcrameri",
         "matplotlib",
         "cycler",
     ],

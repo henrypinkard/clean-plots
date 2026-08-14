@@ -40,3 +40,17 @@ try:
 except ImportError:
     # Fallback if cmocean not installed
     phase = _colormaps['twilight']
+
+# --- Crameri Scientific Colour Maps ---
+try:
+    from cmcrameri import cm as crameri
+    from matplotlib.colors import Colormap as _Colormap
+    for _name in dir(crameri):
+        if _name.startswith('_'):
+            continue
+        _obj = getattr(crameri, _name)
+        if isinstance(_obj, _Colormap):
+            globals()[_name] = _obj
+    del _name, _obj, _Colormap
+except ImportError:
+    crameri = None
