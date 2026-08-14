@@ -27,7 +27,11 @@ __all__ = [
     'get_color_cycle',
 ]
 
-# Default color cycle, in a deliberate colorblind-friendly order -- do not reorder.
+# Default color cycle. Order kept deliberately (2026-08-14): CVD-simulated
+# (Machado severity 1.0) worst front-four pair is blue~purple dE~35 under
+# deuteranopia; red/magenta-early variants score dE 16-29 because #FF005B
+# collides with green (deut) / teal (prot) and #D900FF with blue (deut) /
+# purple (prot). Check any proposed reorder against that simulation first.
 # https://davidmathlogic.com/colorblind/#%23179EE8-%2357B50F-%235A00A0-%23419292-%23D900FF-%23F37C2F-%23ACAD9D-%23FF005B-%23E8B70F-%238B4513
 colors =  ['#179EE8', '#57B50F', '#5A00A0', '#419292',
            '#D900FF', '#F37C2F', '#ACAD9D', '#FF005B',
