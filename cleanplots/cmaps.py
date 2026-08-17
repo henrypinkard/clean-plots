@@ -41,6 +41,25 @@ except ImportError:
     # Fallback if cmocean not installed
     phase = _colormaps['twilight']
 
+# --- Isoluminant (constant lightness; order carried by hue alone) ---
+# The dark-background choice: every level equally visible, no dark end to
+# vanish. Default CET-I3 (cyan -> magenta) — no green to collide with the
+# categorical cycle.
+try:
+    import colorcet as _colorcet
+    CET_I1 = _colorcet.cm.CET_I1
+    CET_I2 = _colorcet.cm.CET_I2
+    CET_I3 = _colorcet.cm.CET_I3
+except ImportError:
+    from matplotlib.colors import LinearSegmentedColormap as _LSC
+    CET_I1 = CET_I2 = None
+    CET_I3 = _LSC.from_list('CET_I3', [
+        '#13b9e5', '#3fb6e7', '#58b4e9', '#6cb1eb', '#7daeec', '#8daaeb',
+        '#9ca7ea', '#aba3e7', '#b89fe1', '#c59bdb', '#d098d4', '#da94cc',
+        '#e490c4', '#ed8cbd', '#f588b5', '#fd84ac',
+    ])
+isolum = CET_I3  # default
+
 # --- Crameri Scientific Colour Maps ---
 try:
     from cmcrameri import cm as crameri
