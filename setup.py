@@ -15,7 +15,7 @@ setuptools.setup(
     name="cleanplots",
     version=version,
     author="Henry Pinkard",
-    author_email="henry.pinkard@gmail.com",
+    author_email="7969470+henrypinkard@users.noreply.github.com",
     description="Nice looking MPL plots",
     long_description=long_description,
     long_description_content_type="text/markdown",
